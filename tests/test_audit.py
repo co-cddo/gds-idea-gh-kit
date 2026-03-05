@@ -174,7 +174,8 @@ def test_audit_repo_explicit_type(httpx_mock: HTTPXMock, gh_client: GitHubClient
 # --- Report rendering ---
 
 
-def test_render_report_passing():
+def test_render_report_all_passing():
+    """All passing — short summary, no individual checks shown."""
     report = AuditReport(
         repo_name="co-cddo/gds-idea-app-foo",
         repo_type="cdk-app",
@@ -186,11 +187,29 @@ def test_render_report_passing():
     output = render_report(report)
     assert "co-cddo/gds-idea-app-foo" in output
     assert "cdk-app" in output
-    assert "2 passed, 0 failed, 0 warnings" in output
+    assert "All 2 checks passed" in output
+    # Individual checks should NOT appear in default mode
+    assert "Name matches" not in output
+
+
+def test_render_report_all_passing_verbose():
+    """Verbose shows individual passing checks."""
+    report = AuditReport(
+        repo_name="co-cddo/gds-idea-app-foo",
+        repo_type="cdk-app",
+        results=[
+            CheckResult(name="naming", status=CheckStatus.PASSED, message="Name matches"),
+            CheckResult(name="settings.wiki", status=CheckStatus.PASSED, message="Wiki: False"),
+        ],
+    )
+    output = render_report(report, verbose=True)
+    assert "Name matches" in output
+    assert "Wiki: False" in output
     assert "\u2713" in output
 
 
-def test_render_report_with_failures():
+def test_render_report_grouped_output():
+    """Default output groups by auto-fixable / manual / warnings."""
     report = AuditReport(
         repo_name="co-cddo/gds-idea-app-foo",
         repo_type="cdk-app",
@@ -202,15 +221,55 @@ def test_render_report_with_failures():
                 message="Wiki: True (expected False)",
                 fix_available=True,
             ),
+            CheckResult(
+                name="files.dependabot",
+                status=CheckStatus.FAILED,
+                message="Required file missing: .github/dependabot.yml",
+                fix_available=False,
+            ),
+            CheckResult(
+                name="teams.unexpected",
+                status=CheckStatus.WARNING,
+                message="Unexpected team found",
+            ),
         ],
     )
     output = render_report(report)
-    assert "1 passed, 1 failed, 0 warnings" in output
+
+    # Sections should appear in order
+    assert "Auto-fixable" in output
+    assert "Manual fixes needed" in output
+    assert "Warnings" in output
+
+    # Passing checks hidden
+    assert "Name matches" not in output
+
+    # Summary
+    assert "1 passed, 2 failed, 1 warning" in output
     assert "1 issue(s) can be auto-fixed" in output
-    assert "\u2717" in output
 
 
-def test_render_report_with_warnings():
+def test_render_report_only_auto_fixable():
+    """Only auto-fixable failures — no manual section shown."""
+    report = AuditReport(
+        repo_name="co-cddo/gds-idea-app-foo",
+        repo_type="cdk-app",
+        results=[
+            CheckResult(
+                name="settings.wiki",
+                status=CheckStatus.FAILED,
+                message="Wiki: True (expected False)",
+                fix_available=True,
+            ),
+        ],
+    )
+    output = render_report(report)
+    assert "Auto-fixable" in output
+    assert "Manual fixes needed" not in output
+    assert "Warnings" not in output
+
+
+def test_render_report_with_warnings_only():
     report = AuditReport(
         repo_name="co-cddo/gds-idea-app-foo",
         repo_type="cdk-app",
@@ -223,7 +282,8 @@ def test_render_report_with_warnings():
         ],
     )
     output = render_report(report)
-    assert "0 passed, 0 failed, 1 warnings" in output
+    assert "0 passed, 0 failed, 1 warning" in output
+    assert "Warnings:" in output
     assert "!" in output
 
 
@@ -250,5 +310,4 @@ def test_render_report_multiline_message():
         ],
     )
     output = render_report(report)
-    # Multi-line messages should be indented
-    assert "    Run: idea-gh rename" in output
+    assert "Run: idea-gh rename" in output

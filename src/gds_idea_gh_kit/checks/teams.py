@@ -65,19 +65,24 @@ def audit(
 
     # Flag direct collaborators (people added outside of teams)
     direct_collabs = client.list_direct_collaborators(owner, repo)
-    for collab in direct_collabs:
-        username = collab["login"]
-        permission = collab.get("role_name", "unknown")
+    if direct_collabs:
+        user_lines = "\n".join(
+            f"    - {c['login']} ({c.get('role_name', 'unknown')})"
+            for c in direct_collabs
+        )
         results.append(
             CheckResult(
-                name=f"teams.direct_collaborator.{username}",
+                name="teams.direct_collaborators",
                 status=CheckStatus.WARNING,
                 message=(
-                    f"User '{username}' has direct '{permission}' access "
-                    f"(not via a team). Consider managing access through "
-                    f"teams instead.\n"
-                    f"  To remove all direct collaborators, run from inside the repo:\n"
-                    f"    idea-gh remove-collaborators"
+                    f"{len(direct_collabs)} direct collaborator(s) found "
+                    f"(not via a team):\n"
+                    f"{user_lines}\n"
+                    f"  Consider managing access through teams instead.\n"
+                    f"  To remove specific users:\n"
+                    f"    idea-gh remove-collaborators <username> [<username> ...]\n"
+                    f"  To remove all:\n"
+                    f"    idea-gh remove-collaborators --all"
                 ),
             )
         )

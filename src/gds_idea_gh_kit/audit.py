@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from gds_idea_gh_kit.checks import branches, files, naming, security, settings, teams
 from gds_idea_gh_kit.github_client import GitHubClient
-from gds_idea_gh_kit.models import AuditReport, Config, RepoTypeConfig
+from gds_idea_gh_kit.models import AuditReport, CheckResult, CheckStatus, Config, RepoTypeConfig
 
 
 def audit_repo(
@@ -75,8 +75,21 @@ def audit_repo(
     return report
 
 
-def render_report(report: AuditReport) -> str:
-    """Render an AuditReport as a human-readable string."""
+def _render_result_lines(result: CheckResult, indent: str = "    ") -> list[str]:
+    """Render a single CheckResult as indented lines."""
+    message_lines = result.message.split("\n")
+    lines = [f"{indent}{result.symbol} {message_lines[0]}"]
+    for extra_line in message_lines[1:]:
+        lines.append(f"{indent}  {extra_line}")
+    return lines
+
+
+def render_report(report: AuditReport, verbose: bool = False) -> str:
+    """Render an AuditReport as a human-readable string.
+
+    Default: grouped by fixable/manual/warnings, passing checks hidden.
+    Verbose: all checks in original order.
+    """
     lines = [
         f"Auditing {report.repo_name} (type: {report.repo_type})",
         "",
@@ -86,18 +99,41 @@ def render_report(report: AuditReport) -> str:
         lines.append("  No checks to run (repo type not recognised).")
         return "\n".join(lines)
 
-    for result in report.results:
-        # Indent multi-line messages
-        message_lines = result.message.split("\n")
-        first_line = f"  {result.symbol} {message_lines[0]}"
-        lines.append(first_line)
-        for extra_line in message_lines[1:]:
-            lines.append(f"    {extra_line}")
+    if verbose:
+        for result in report.results:
+            lines.extend(_render_result_lines(result, indent="  "))
+    else:
+        # All passing — short summary
+        if report.failed == 0 and report.warnings == 0:
+            lines.append(f"  All {report.passed} checks passed.")
+            return "\n".join(lines)
 
-    lines.append("")
+        # Group results
+        auto_fixable = [r for r in report.results if r.status == CheckStatus.FAILED and r.fix_available]
+        manual_fix = [r for r in report.results if r.status == CheckStatus.FAILED and not r.fix_available]
+        warnings = [r for r in report.results if r.status == CheckStatus.WARNING]
+
+        if auto_fixable:
+            lines.append("  Auto-fixable (run with --fix):")
+            for result in auto_fixable:
+                lines.extend(_render_result_lines(result))
+            lines.append("")
+
+        if manual_fix:
+            lines.append("  Manual fixes needed:")
+            for result in manual_fix:
+                lines.extend(_render_result_lines(result))
+            lines.append("")
+
+        if warnings:
+            lines.append("  Warnings:")
+            for result in warnings:
+                lines.extend(_render_result_lines(result))
+            lines.append("")
+
     lines.append(
         f"  Result: {report.passed} passed, {report.failed} failed, "
-        f"{report.warnings} warnings"
+        f"{report.warnings} warning(s)"
     )
 
     if report.fixable:

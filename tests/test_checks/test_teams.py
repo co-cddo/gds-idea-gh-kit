@@ -114,7 +114,7 @@ def test_no_unexpected_teams(httpx_mock: HTTPXMock, gh_client: GitHubClient):
     assert len(warnings) == 0
 
 
-def test_direct_collaborator_warned(httpx_mock: HTTPXMock, gh_client: GitHubClient):
+def test_direct_collaborators_grouped(httpx_mock: HTTPXMock, gh_client: GitHubClient):
     httpx_mock.add_response(
         url="https://api.github.com/orgs/co-cddo/teams/cddo-admins/repos/co-cddo/my-repo",
         json={"role_name": "admin"},
@@ -135,8 +135,11 @@ def test_direct_collaborator_warned(httpx_mock: HTTPXMock, gh_client: GitHubClie
     results = teams.audit("co-cddo", "my-repo", expected, gh_client)
 
     warnings = [r for r in results if "direct_collaborator" in r.name]
-    assert len(warnings) == 2
-    logins = {w.message.split("'")[1] for w in warnings}
-    assert logins == {"jane-doe", "bob-smith"}
-    assert all("through teams instead" in w.message for w in warnings)
-    assert all("idea-gh remove-collaborators" in w.message for w in warnings)
+    assert len(warnings) == 1  # grouped into one result
+    msg = warnings[0].message
+    assert "2 direct collaborator(s)" in msg
+    assert "jane-doe" in msg
+    assert "bob-smith" in msg
+    assert "through teams instead" in msg
+    assert "idea-gh remove-collaborators --all" in msg
+    assert "idea-gh remove-collaborators <username>" in msg
