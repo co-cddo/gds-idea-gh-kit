@@ -2,9 +2,9 @@ org: co-cddo
 default_visibility: private
 
 teams:
-  cddo-idea-admins: admin
-  cddo-idea-developers: write
-  cddo-idea-readers: read
+  gds-idea-admins: admin
+  gds-idea-developers: write
+  gds-idea-readers: read
 
 repo_settings:
   delete_branch_on_merge: true
@@ -29,7 +29,8 @@ repo_types:
   cdk-app:
     naming_pattern: "gds-idea-app-{name}"
     default_branch: dev
-    required_workflows: [lint.yml, test.yml, cdk-deploy-dev.yml, cdk-deploy-prod.yml]
+    required_workflows:
+      [lint.yml, test.yml, cdk-deploy-dev.yml, cdk-deploy-prod.yml]
     branch_protection:
       dev:
         require_pr: true
