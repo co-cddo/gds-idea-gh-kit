@@ -10,8 +10,15 @@ from gds_idea_gh_kit.models import Config, RepoTypeConfig
 # --- Loading from file ---
 
 
-def test_load_example_config(tmp_path):
-    """The example config should load without errors."""
+def test_load_bundled_config():
+    """Loading with no path should use the bundled config."""
+    config = load_config()
+    assert config.org == "co-cddo"
+    assert len(config.repo_types) > 0
+
+
+def test_load_custom_config(tmp_path):
+    """A custom config file should load when passed explicitly."""
     config_file = tmp_path / "idea-gh.yml"
     config_file.write_text(
         """\

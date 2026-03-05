@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import subprocess
+import time
 
 import httpx
 
 GITHUB_API_BASE = "https://api.github.com"
+CONNECTION_TTL = 300  # seconds
 
 
 class GitHubClientError(Exception):
@@ -52,6 +54,7 @@ class GitHubClient:
     def __init__(self, token: str | None = None, org: str | None = None):
         self.token = token or get_gh_token()
         self.org = org
+        self._verified_at: float | None = None
         self._client = httpx.Client(
             base_url=GITHUB_API_BASE,
             headers={
@@ -70,6 +73,55 @@ class GitHubClient:
 
     def __exit__(self, *args):
         self.close()
+
+    def verify_connection(self) -> None:
+        """Check we can reach GitHub and access the configured org.
+
+        Results are cached for CONNECTION_TTL seconds to avoid repeated
+        checks within a single command invocation.
+
+        Raises:
+            AuthError: if the token is invalid or expired.
+            GitHubClientError: if the network is unreachable or the org
+                is not accessible.
+        """
+        if self._verified_at and (time.monotonic() - self._verified_at) < CONNECTION_TTL:
+            return
+
+        # Check network + token
+        try:
+            response = self._client.get("/user")
+        except (httpx.ConnectError, httpx.TimeoutException):
+            raise GitHubClientError(
+                "Cannot reach api.github.com. Check your network connection and VPN."
+            )
+
+        if response.status_code == 401:
+            raise AuthError(
+                "GitHub token is invalid or expired.\n"
+                "Run 'gh auth login' to re-authenticate."
+            )
+        if response.status_code >= 400:
+            raise GitHubClientError(
+                f"Unexpected error checking GitHub connection: {response.status_code}"
+            )
+
+        # Check org access
+        if self.org:
+            try:
+                org_response = self._client.get(f"/orgs/{self.org}")
+            except (httpx.ConnectError, httpx.TimeoutException):
+                raise GitHubClientError(
+                    "Cannot reach api.github.com. Check your network connection and VPN."
+                )
+
+            if org_response.status_code in (404, 403):
+                raise GitHubClientError(
+                    f"Cannot access org '{self.org}'. Check you have access "
+                    f"and the org name is correct in your config."
+                )
+
+        self._verified_at = time.monotonic()
 
     def _request(self, method: str, path: str, **kwargs) -> httpx.Response:
         """Make an API request and raise on error."""

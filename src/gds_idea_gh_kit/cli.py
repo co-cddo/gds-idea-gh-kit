@@ -14,9 +14,9 @@ from gds_idea_gh_kit import __version__
 @click.option(
     "--config",
     "config_path",
-    type=click.Path(exists=True, path_type=Path),
+    type=click.Path(path_type=Path),
     default=None,
-    help="Path to idea-gh.yml config file.",
+    help="Path to custom config file (default: built-in config).",
 )
 @click.pass_context
 def cli(ctx: click.Context, config_path: Path | None):
@@ -61,7 +61,7 @@ def audit(ctx: click.Context, repo_type: str | None, audit_all: bool, apply_fix:
     """
     from gds_idea_gh_kit.audit import audit_repo, fix_repo, render_report
     from gds_idea_gh_kit.config import ConfigError, load_config
-    from gds_idea_gh_kit.github_client import GitHubClient
+    from gds_idea_gh_kit.github_client import AuthError, GitHubClient, GitHubClientError
     from gds_idea_gh_kit.repo_info import RepoInfoError, get_repo_from_remote
 
     try:
@@ -76,6 +76,11 @@ def audit(ctx: click.Context, repo_type: str | None, audit_all: bool, apply_fix:
         )
 
     with GitHubClient(org=config.org) as client:
+        try:
+            client.verify_connection()
+        except (GitHubClientError, AuthError) as e:
+            raise click.ClickException(str(e))
+
         if audit_all:
             _audit_all_repos(config, client, repo_type, apply_fix=apply_fix, verbose=verbose)
         else:
@@ -190,7 +195,7 @@ def rename(ctx: click.Context, new_name: str, yes: bool):
     are not guaranteed to be permanent.
     """
     from gds_idea_gh_kit.config import ConfigError, load_config
-    from gds_idea_gh_kit.github_client import GitHubClient
+    from gds_idea_gh_kit.github_client import AuthError, GitHubClient, GitHubClientError
     from gds_idea_gh_kit.repo_info import RepoInfoError, get_repo_from_remote
 
     try:
@@ -215,6 +220,11 @@ def rename(ctx: click.Context, new_name: str, yes: bool):
         )
 
     with GitHubClient(org=config.org) as client:
+        try:
+            client.verify_connection()
+        except (GitHubClientError, AuthError) as e:
+            raise click.ClickException(str(e))
+
         client.update_repo(owner, repo, name=new_name)
         click.echo(f"Renamed {owner}/{repo} -> {owner}/{new_name}")
 
@@ -237,7 +247,7 @@ def remove_collaborators(ctx: click.Context, usernames: tuple[str, ...], remove_
       idea-gh remove-collaborators --all --yes
     """
     from gds_idea_gh_kit.config import ConfigError, load_config
-    from gds_idea_gh_kit.github_client import GitHubClient
+    from gds_idea_gh_kit.github_client import AuthError, GitHubClient, GitHubClientError
     from gds_idea_gh_kit.repo_info import RepoInfoError, get_repo_from_remote
 
     if not usernames and not remove_all:
@@ -256,6 +266,11 @@ def remove_collaborators(ctx: click.Context, usernames: tuple[str, ...], remove_
         raise click.ClickException(str(e))
 
     with GitHubClient(org=config.org) as client:
+        try:
+            client.verify_connection()
+        except (GitHubClientError, AuthError) as e:
+            raise click.ClickException(str(e))
+
         collabs = client.list_direct_collaborators(owner, repo)
         collab_logins = {c["login"] for c in collabs}
 
