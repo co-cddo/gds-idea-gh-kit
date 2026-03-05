@@ -15,7 +15,7 @@ def test_load_example_config(tmp_path):
     config_file = tmp_path / "idea-gh.yml"
     config_file.write_text(
         """\
-org: alphagov
+org: co-cddo
 team_prefix: cddo
 default_visibility: private
 teams:
@@ -40,7 +40,7 @@ repo_types:
 """
     )
     config = load_config(config_file)
-    assert config.org == "alphagov"
+    assert config.org == "co-cddo"
     assert config.team_prefix == "cddo"
     assert "cddo-idea-admins" in config.teams
     assert "cdk-app" in config.repo_types
@@ -87,17 +87,17 @@ def test_missing_org():
 
 def test_missing_team_prefix():
     with pytest.raises(ValidationError, match="team_prefix"):
-        Config(org="alphagov")
+        Config(org="co-cddo")
 
 
 def test_invalid_visibility():
     with pytest.raises(ValidationError, match="public.*private.*internal"):
-        Config(org="alphagov", team_prefix="cddo", default_visibility="secret")
+        Config(org="co-cddo", team_prefix="cddo", default_visibility="secret")
 
 
 def test_invalid_team_permission():
     with pytest.raises(ValidationError, match="invalid permission"):
-        Config(org="alphagov", team_prefix="cddo", teams={"myteam": "superadmin"})
+        Config(org="co-cddo", team_prefix="cddo", teams={"myteam": "superadmin"})
 
 
 def test_naming_pattern_requires_placeholder():
@@ -107,7 +107,7 @@ def test_naming_pattern_requires_placeholder():
 
 def test_extra_fields_rejected():
     with pytest.raises(ValidationError, match="extra"):
-        Config(org="alphagov", team_prefix="cddo", bogus_field="oops")
+        Config(org="co-cddo", team_prefix="cddo", bogus_field="oops")
 
 
 # --- RepoTypeConfig matching ---
@@ -129,7 +129,7 @@ def test_extract_name():
 
 def test_detect_repo_type():
     config = Config(
-        org="alphagov",
+        org="co-cddo",
         team_prefix="cddo",
         repo_types={
             "cdk-app": RepoTypeConfig(
