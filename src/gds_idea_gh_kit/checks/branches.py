@@ -1,4 +1,4 @@
-"""Check default branch name and branch protection rules."""
+"""Check default branch name and branch protection via rulesets."""
 
 from __future__ import annotations
 
@@ -10,11 +10,18 @@ from gds_idea_gh_kit.models import (
     RepoTypeConfig,
 )
 
+RULESET_PREFIX = "idea-gh"
+
+
+def _ruleset_name(branch: str) -> str:
+    """Name for a managed ruleset."""
+    return f"{RULESET_PREFIX}: {branch}"
+
 
 def audit(
     owner: str, repo: str, type_config: RepoTypeConfig, client: GitHubClient
 ) -> list[CheckResult]:
-    """Check default branch and all configured branch protection rules."""
+    """Check default branch and all configured branch protection rulesets."""
     results = []
     repo_data = client.get_repo(owner, repo)
 
@@ -41,178 +48,216 @@ def audit(
             )
         )
 
-    # --- Branch protection ---
+    # --- Classic branch protection warning ---
+    for branch_name in type_config.branch_protection:
+        classic = client.get_branch_protection(owner, repo, branch_name)
+        if classic is not None:
+            results.append(
+                CheckResult(
+                    name=f"branches.classic_protection.{branch_name}",
+                    status=CheckStatus.WARNING,
+                    message=(
+                        f"Branch '{branch_name}' has classic branch protection rules. "
+                        f"These should be migrated to rulesets. "
+                        f"Run with --fix to remove and replace with rulesets."
+                    ),
+                    fix_available=True,
+                )
+            )
+
+    # --- Rulesets ---
     for branch_name, expected_bp in type_config.branch_protection.items():
-        results.extend(_audit_branch_protection(owner, repo, branch_name, expected_bp, client))
+        results.extend(
+            _audit_ruleset(owner, repo, branch_name, expected_bp, client)
+        )
 
     return results
 
 
-def _audit_branch_protection(
+def _audit_ruleset(
     owner: str,
     repo: str,
     branch: str,
     expected: BranchProtectionConfig,
     client: GitHubClient,
 ) -> list[CheckResult]:
-    """Audit protection rules for a single branch."""
-    actual = client.get_branch_protection(owner, repo, branch)
+    """Audit the ruleset for a single branch."""
+    name = _ruleset_name(branch)
+    ruleset = client.find_ruleset_by_name(owner, repo, name)
 
-    if actual is None:
+    if ruleset is None:
         return [
             CheckResult(
-                name=f"branches.protection.{branch}",
+                name=f"branches.ruleset.{branch}",
                 status=CheckStatus.FAILED,
-                message=f"Branch '{branch}' has no protection rules",
+                message=f"Ruleset '{name}' not found",
                 fix_available=True,
             )
         ]
 
     results = []
+    actual_rules = {r["type"]: r for r in ruleset.get("rules", [])}
 
-    # PR required
-    pr_reviews = actual.get("required_pull_request_reviews")
-    if expected.require_pr and pr_reviews is None:
+    # --- Deletion protection ---
+    has_deletion = "deletion" in actual_rules
+    if has_deletion == expected.prevent_deletion:
         results.append(
             CheckResult(
-                name=f"branches.protection.{branch}.require_pr",
-                status=CheckStatus.FAILED,
-                message=f"Branch '{branch}': PR reviews not required (expected required)",
-                fix_available=True,
-            )
-        )
-    elif expected.require_pr and pr_reviews is not None:
-        results.append(
-            CheckResult(
-                name=f"branches.protection.{branch}.require_pr",
+                name=f"branches.ruleset.{branch}.deletion",
                 status=CheckStatus.PASSED,
-                message=f"Branch '{branch}': PR reviews required",
-            )
-        )
-
-        # Approvals count
-        actual_approvals = pr_reviews.get("required_approving_review_count", 0)
-        if actual_approvals == expected.required_approvals:
-            results.append(
-                CheckResult(
-                    name=f"branches.protection.{branch}.required_approvals",
-                    status=CheckStatus.PASSED,
-                    message=f"Branch '{branch}': {actual_approvals} approval(s) required",
-                )
-            )
-        else:
-            results.append(
-                CheckResult(
-                    name=f"branches.protection.{branch}.required_approvals",
-                    status=CheckStatus.FAILED,
-                    message=(
-                        f"Branch '{branch}': {actual_approvals} approval(s) required "
-                        f"(expected {expected.required_approvals})"
-                    ),
-                    fix_available=True,
-                )
-            )
-
-        # Dismiss stale reviews
-        actual_dismiss = pr_reviews.get("dismiss_stale_reviews", False)
-        if actual_dismiss == expected.dismiss_stale_reviews:
-            results.append(
-                CheckResult(
-                    name=f"branches.protection.{branch}.dismiss_stale",
-                    status=CheckStatus.PASSED,
-                    message=f"Branch '{branch}': dismiss stale reviews: {actual_dismiss}",
-                )
-            )
-        else:
-            results.append(
-                CheckResult(
-                    name=f"branches.protection.{branch}.dismiss_stale",
-                    status=CheckStatus.FAILED,
-                    message=(
-                        f"Branch '{branch}': dismiss stale reviews: {actual_dismiss} "
-                        f"(expected {expected.dismiss_stale_reviews})"
-                    ),
-                    fix_available=True,
-                )
-            )
-
-        # Required review teams (dismissal_restrictions.teams)
-        if expected.required_review_teams:
-            restrictions = pr_reviews.get("dismissal_restrictions", {})
-            actual_teams = {
-                t["slug"] for t in restrictions.get("teams", [])
-            }
-            expected_set = set(expected.required_review_teams)
-
-            if expected_set <= actual_teams:
-                results.append(
-                    CheckResult(
-                        name=f"branches.protection.{branch}.review_teams",
-                        status=CheckStatus.PASSED,
-                        message=(
-                            f"Branch '{branch}': required review teams: "
-                            f"{', '.join(sorted(expected_set))}"
-                        ),
-                    )
-                )
-            else:
-                missing = expected_set - actual_teams
-                results.append(
-                    CheckResult(
-                        name=f"branches.protection.{branch}.review_teams",
-                        status=CheckStatus.FAILED,
-                        message=(
-                            f"Branch '{branch}': missing review teams: "
-                            f"{', '.join(sorted(missing))}"
-                        ),
-                        fix_available=True,
-                    )
-                )
-
-    # Enforce admins
-    enforce = actual.get("enforce_admins", {})
-    actual_enforce = enforce.get("enabled", False) if isinstance(enforce, dict) else False
-    if actual_enforce == expected.enforce_admins:
-        results.append(
-            CheckResult(
-                name=f"branches.protection.{branch}.enforce_admins",
-                status=CheckStatus.PASSED,
-                message=f"Branch '{branch}': enforce admins: {actual_enforce}",
+                message=f"Branch '{branch}': prevent deletion: {has_deletion}",
             )
         )
     else:
         results.append(
             CheckResult(
-                name=f"branches.protection.{branch}.enforce_admins",
+                name=f"branches.ruleset.{branch}.deletion",
                 status=CheckStatus.FAILED,
                 message=(
-                    f"Branch '{branch}': enforce admins: {actual_enforce} "
-                    f"(expected {expected.enforce_admins})"
+                    f"Branch '{branch}': prevent deletion: {has_deletion} "
+                    f"(expected {expected.prevent_deletion})"
                 ),
                 fix_available=True,
             )
         )
 
-    # Required status checks
-    status_checks = actual.get("required_status_checks")
-    if expected.require_status_checks:
-        if status_checks is None:
+    # --- Force push protection ---
+    has_nff = "non_fast_forward" in actual_rules
+    if has_nff == expected.prevent_force_push:
+        results.append(
+            CheckResult(
+                name=f"branches.ruleset.{branch}.force_push",
+                status=CheckStatus.PASSED,
+                message=f"Branch '{branch}': prevent force push: {has_nff}",
+            )
+        )
+    else:
+        results.append(
+            CheckResult(
+                name=f"branches.ruleset.{branch}.force_push",
+                status=CheckStatus.FAILED,
+                message=(
+                    f"Branch '{branch}': prevent force push: {has_nff} "
+                    f"(expected {expected.prevent_force_push})"
+                ),
+                fix_available=True,
+            )
+        )
+
+    # --- Linear history ---
+    has_linear = "required_linear_history" in actual_rules
+    if has_linear == expected.require_linear_history:
+        results.append(
+            CheckResult(
+                name=f"branches.ruleset.{branch}.linear_history",
+                status=CheckStatus.PASSED,
+                message=f"Branch '{branch}': linear history: {has_linear}",
+            )
+        )
+    else:
+        results.append(
+            CheckResult(
+                name=f"branches.ruleset.{branch}.linear_history",
+                status=CheckStatus.FAILED,
+                message=(
+                    f"Branch '{branch}': linear history: {has_linear} "
+                    f"(expected {expected.require_linear_history})"
+                ),
+                fix_available=True,
+            )
+        )
+
+    # --- Pull request rules ---
+    pr_rule = actual_rules.get("pull_request")
+    if expected.require_pr:
+        if pr_rule is None:
             results.append(
                 CheckResult(
-                    name=f"branches.protection.{branch}.status_checks",
+                    name=f"branches.ruleset.{branch}.require_pr",
                     status=CheckStatus.FAILED,
-                    message=f"Branch '{branch}': no status checks configured",
+                    message=f"Branch '{branch}': pull request rule missing",
                     fix_available=True,
                 )
             )
         else:
-            actual_contexts = set(status_checks.get("contexts", []))
+            results.append(
+                CheckResult(
+                    name=f"branches.ruleset.{branch}.require_pr",
+                    status=CheckStatus.PASSED,
+                    message=f"Branch '{branch}': pull request required",
+                )
+            )
+            params = pr_rule.get("parameters", {})
+
+            # Approvals
+            actual_approvals = params.get("required_approving_review_count", 0)
+            if actual_approvals == expected.required_approvals:
+                results.append(
+                    CheckResult(
+                        name=f"branches.ruleset.{branch}.approvals",
+                        status=CheckStatus.PASSED,
+                        message=f"Branch '{branch}': {actual_approvals} approval(s) required",
+                    )
+                )
+            else:
+                results.append(
+                    CheckResult(
+                        name=f"branches.ruleset.{branch}.approvals",
+                        status=CheckStatus.FAILED,
+                        message=(
+                            f"Branch '{branch}': {actual_approvals} approval(s) required "
+                            f"(expected {expected.required_approvals})"
+                        ),
+                        fix_available=True,
+                    )
+                )
+
+            # Dismiss stale reviews
+            actual_dismiss = params.get("dismiss_stale_reviews_on_push", False)
+            if actual_dismiss == expected.dismiss_stale_reviews:
+                results.append(
+                    CheckResult(
+                        name=f"branches.ruleset.{branch}.dismiss_stale",
+                        status=CheckStatus.PASSED,
+                        message=f"Branch '{branch}': dismiss stale reviews: {actual_dismiss}",
+                    )
+                )
+            else:
+                results.append(
+                    CheckResult(
+                        name=f"branches.ruleset.{branch}.dismiss_stale",
+                        status=CheckStatus.FAILED,
+                        message=(
+                            f"Branch '{branch}': dismiss stale reviews: {actual_dismiss} "
+                            f"(expected {expected.dismiss_stale_reviews})"
+                        ),
+                        fix_available=True,
+                    )
+                )
+
+    # --- Required status checks ---
+    sc_rule = actual_rules.get("required_status_checks")
+    if expected.require_status_checks:
+        if sc_rule is None:
+            results.append(
+                CheckResult(
+                    name=f"branches.ruleset.{branch}.status_checks",
+                    status=CheckStatus.FAILED,
+                    message=f"Branch '{branch}': status checks rule missing",
+                    fix_available=True,
+                )
+            )
+        else:
+            params = sc_rule.get("parameters", {})
+            actual_contexts = {
+                c["context"] for c in params.get("required_status_checks", [])
+            }
             expected_contexts = set(expected.require_status_checks)
             missing = expected_contexts - actual_contexts
             if not missing:
                 results.append(
                     CheckResult(
-                        name=f"branches.protection.{branch}.status_checks",
+                        name=f"branches.ruleset.{branch}.status_checks",
                         status=CheckStatus.PASSED,
                         message=(
                             f"Branch '{branch}': status checks: "
@@ -223,7 +268,7 @@ def _audit_branch_protection(
             else:
                 results.append(
                     CheckResult(
-                        name=f"branches.protection.{branch}.status_checks",
+                        name=f"branches.ruleset.{branch}.status_checks",
                         status=CheckStatus.FAILED,
                         message=(
                             f"Branch '{branch}': missing status checks: "
@@ -233,39 +278,59 @@ def _audit_branch_protection(
                     )
                 )
 
-    # Linear history
-    actual_linear = actual.get("required_linear_history", {})
-    actual_linear_enabled = (
-        actual_linear.get("enabled", False) if isinstance(actual_linear, dict) else False
-    )
-    if actual_linear_enabled == expected.require_linear_history:
-        results.append(
-            CheckResult(
-                name=f"branches.protection.{branch}.linear_history",
-                status=CheckStatus.PASSED,
-                message=f"Branch '{branch}': linear history: {actual_linear_enabled}",
+    # --- Bypass actors ---
+    actual_bypass = ruleset.get("bypass_actors", [])
+    actual_bypass_team_ids = {
+        a["actor_id"] for a in actual_bypass if a.get("actor_type") == "Team"
+    }
+    if expected.bypass_teams:
+        # We can't resolve slugs to IDs during audit without extra API calls,
+        # so we check count and report slugs for readability
+        if len(actual_bypass_team_ids) >= len(expected.bypass_teams):
+            results.append(
+                CheckResult(
+                    name=f"branches.ruleset.{branch}.bypass_teams",
+                    status=CheckStatus.PASSED,
+                    message=(
+                        f"Branch '{branch}': bypass teams configured "
+                        f"({len(actual_bypass_team_ids)} team(s))"
+                    ),
+                )
             )
-        )
-    else:
+        else:
+            results.append(
+                CheckResult(
+                    name=f"branches.ruleset.{branch}.bypass_teams",
+                    status=CheckStatus.FAILED,
+                    message=(
+                        f"Branch '{branch}': expected {len(expected.bypass_teams)} "
+                        f"bypass team(s), found {len(actual_bypass_team_ids)}"
+                    ),
+                    fix_available=True,
+                )
+            )
+    elif actual_bypass_team_ids:
         results.append(
             CheckResult(
-                name=f"branches.protection.{branch}.linear_history",
-                status=CheckStatus.FAILED,
+                name=f"branches.ruleset.{branch}.bypass_teams",
+                status=CheckStatus.WARNING,
                 message=(
-                    f"Branch '{branch}': linear history: {actual_linear_enabled} "
-                    f"(expected {expected.require_linear_history})"
+                    f"Branch '{branch}': {len(actual_bypass_team_ids)} bypass team(s) "
+                    f"configured but none expected"
                 ),
-                fix_available=True,
             )
         )
 
     return results
 
 
+# --- Fix ---
+
+
 def fix(
     owner: str, repo: str, type_config: RepoTypeConfig, client: GitHubClient
 ) -> list[str]:
-    """Apply default branch and branch protection fixes. Returns list of changes."""
+    """Apply default branch and ruleset fixes. Returns list of changes."""
     changes = []
     repo_data = client.get_repo(owner, repo)
     org = client.org or owner
@@ -277,43 +342,89 @@ def fix(
             f"Default branch: {repo_data['default_branch']} -> {type_config.default_branch}"
         )
 
-    # Fix branch protection
+    # Remove classic branch protection if present
+    for branch_name in type_config.branch_protection:
+        classic = client.get_branch_protection(owner, repo, branch_name)
+        if classic is not None:
+            client.delete_branch_protection(owner, repo, branch_name)
+            changes.append(f"Removed classic branch protection from '{branch_name}'")
+
+    # Create or update rulesets
     for branch_name, expected_bp in type_config.branch_protection.items():
-        payload = _build_protection_payload(expected_bp, org)
-        client.set_branch_protection(owner, repo, branch_name, **payload)
-        changes.append(f"Branch protection applied to '{branch_name}'")
+        name = _ruleset_name(branch_name)
+        payload = _build_ruleset_payload(name, branch_name, expected_bp, org, client)
+
+        existing = client.find_ruleset_by_name(owner, repo, name)
+        if existing:
+            client.update_ruleset(owner, repo, existing["id"], payload)
+            changes.append(f"Updated ruleset '{name}'")
+        else:
+            client.create_ruleset(owner, repo, payload)
+            changes.append(f"Created ruleset '{name}'")
 
     return changes
 
 
-def _build_protection_payload(bp: BranchProtectionConfig, org: str) -> dict:
-    """Build the GitHub API payload for branch protection."""
-    payload: dict = {
-        "enforce_admins": bp.enforce_admins,
-        "required_linear_history": bp.require_linear_history,
-        "restrictions": None,
-    }
+def _build_ruleset_payload(
+    name: str,
+    branch: str,
+    bp: BranchProtectionConfig,
+    org: str,
+    client: GitHubClient,
+) -> dict:
+    """Build the GitHub API payload for a ruleset."""
+    rules: list[dict] = []
+
+    if bp.prevent_deletion:
+        rules.append({"type": "deletion"})
+
+    if bp.prevent_force_push:
+        rules.append({"type": "non_fast_forward"})
+
+    if bp.require_linear_history:
+        rules.append({"type": "required_linear_history"})
 
     if bp.require_pr:
-        pr_reviews: dict = {
+        pr_params: dict = {
             "required_approving_review_count": bp.required_approvals,
-            "dismiss_stale_reviews": bp.dismiss_stale_reviews,
+            "dismiss_stale_reviews_on_push": bp.dismiss_stale_reviews,
+            "require_code_owner_review": False,
+            "require_last_push_approval": False,
+            "required_review_thread_resolution": False,
         }
-        if bp.required_review_teams:
-            pr_reviews["dismissal_restrictions"] = {
-                "users": [],
-                "teams": bp.required_review_teams,
-            }
-        payload["required_pull_request_reviews"] = pr_reviews
-    else:
-        payload["required_pull_request_reviews"] = None
+        rules.append({"type": "pull_request", "parameters": pr_params})
 
     if bp.require_status_checks:
-        payload["required_status_checks"] = {
-            "strict": True,
-            "contexts": bp.require_status_checks,
-        }
-    else:
-        payload["required_status_checks"] = None
+        rules.append({
+            "type": "required_status_checks",
+            "parameters": {
+                "strict_required_status_checks_policy": True,
+                "required_status_checks": [
+                    {"context": ctx} for ctx in bp.require_status_checks
+                ],
+            },
+        })
 
-    return payload
+    # Bypass actors
+    bypass_actors = []
+    for team_slug in bp.bypass_teams:
+        team_id = client.get_team_id(org, team_slug)
+        bypass_actors.append({
+            "actor_id": team_id,
+            "actor_type": "Team",
+            "bypass_mode": bp.bypass_mode,
+        })
+
+    return {
+        "name": name,
+        "target": "branch",
+        "enforcement": "active",
+        "conditions": {
+            "ref_name": {
+                "include": [f"refs/heads/{branch}"],
+                "exclude": [],
+            }
+        },
+        "rules": rules,
+        "bypass_actors": bypass_actors,
+    }

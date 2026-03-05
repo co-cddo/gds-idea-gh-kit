@@ -139,10 +139,10 @@ class GitHubClient:
             json={"permission": permission},
         )
 
-    # --- Branch protection ---
+    # --- Branch protection (classic — for migration/cleanup) ---
 
     def get_branch_protection(self, owner: str, repo: str, branch: str) -> dict | None:
-        """Get branch protection rules. Returns None if not protected."""
+        """Get classic branch protection rules. Returns None if not protected."""
         try:
             return self._request(
                 "GET", f"/repos/{owner}/{repo}/branches/{branch}/protection"
@@ -150,11 +150,50 @@ class GitHubClient:
         except GitHubClientError:
             return None
 
-    def set_branch_protection(self, owner: str, repo: str, branch: str, **rules) -> dict:
-        """Set branch protection rules."""
+    def delete_branch_protection(self, owner: str, repo: str, branch: str) -> None:
+        """Remove classic branch protection from a branch."""
+        self._request("DELETE", f"/repos/{owner}/{repo}/branches/{branch}/protection")
+
+    # --- Rulesets ---
+
+    def list_rulesets(self, owner: str, repo: str) -> list[dict]:
+        """List all rulesets for a repo."""
+        return self._request("GET", f"/repos/{owner}/{repo}/rulesets").json()
+
+    def get_ruleset(self, owner: str, repo: str, ruleset_id: int) -> dict:
+        """Get a specific ruleset by ID."""
+        return self._request("GET", f"/repos/{owner}/{repo}/rulesets/{ruleset_id}").json()
+
+    def create_ruleset(self, owner: str, repo: str, payload: dict) -> dict:
+        """Create a new ruleset."""
+        return self._request("POST", f"/repos/{owner}/{repo}/rulesets", json=payload).json()
+
+    def update_ruleset(self, owner: str, repo: str, ruleset_id: int, payload: dict) -> dict:
+        """Update an existing ruleset."""
         return self._request(
-            "PUT", f"/repos/{owner}/{repo}/branches/{branch}/protection", json=rules
+            "PUT", f"/repos/{owner}/{repo}/rulesets/{ruleset_id}", json=payload
         ).json()
+
+    def delete_ruleset(self, owner: str, repo: str, ruleset_id: int) -> None:
+        """Delete a ruleset."""
+        self._request("DELETE", f"/repos/{owner}/{repo}/rulesets/{ruleset_id}")
+
+    def find_ruleset_by_name(self, owner: str, repo: str, name: str) -> dict | None:
+        """Find a ruleset by name. Returns None if not found."""
+        for rs in self.list_rulesets(owner, repo):
+            if rs["name"] == name:
+                return self.get_ruleset(owner, repo, rs["id"])
+        return None
+
+    # --- Teams ---
+
+    def get_team(self, org: str, team_slug: str) -> dict:
+        """Get team details including ID."""
+        return self._request("GET", f"/orgs/{org}/teams/{team_slug}").json()
+
+    def get_team_id(self, org: str, team_slug: str) -> int:
+        """Look up a team's numeric ID from its slug."""
+        return self.get_team(org, team_slug)["id"]
 
     # --- Contents (for required files check) ---
 

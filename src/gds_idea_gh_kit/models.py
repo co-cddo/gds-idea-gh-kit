@@ -68,9 +68,21 @@ class BranchProtectionConfig(BaseModel):
     dismiss_stale_reviews: bool = True
     require_status_checks: list[str] = Field(default_factory=list)
     require_linear_history: bool = False
-    enforce_admins: bool = False
     required_review_teams: list[str] = Field(default_factory=list)
     """Teams that must review PRs to this branch (by slug, e.g. 'cddo-idea-admins')."""
+    prevent_deletion: bool = True
+    prevent_force_push: bool = True
+    bypass_teams: list[str] = Field(default_factory=list)
+    """Teams that can bypass rules on this branch (by slug)."""
+    bypass_mode: str = "pull_request"
+    """When bypass teams can bypass: 'always' or 'pull_request'."""
+
+    @field_validator("bypass_mode")
+    @classmethod
+    def bypass_mode_must_be_valid(cls, v: str) -> str:
+        if v not in ("always", "pull_request"):
+            raise ValueError(f"bypass_mode must be 'always' or 'pull_request', got '{v}'")
+        return v
 
 
 class RepoTypeConfig(BaseModel):
