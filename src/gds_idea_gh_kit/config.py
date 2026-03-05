@@ -9,7 +9,7 @@ from pydantic import ValidationError
 
 from gds_idea_gh_kit.models import Config
 
-DEFAULT_CONFIG_FILENAME = "idea-gh.yml"
+_BUNDLED_CONFIG = Path(__file__).parent / "config.yml"
 
 
 class ConfigError(Exception):
@@ -17,25 +17,17 @@ class ConfigError(Exception):
 
 
 def find_config(path: Path | None = None) -> Path:
-    """Find the config file, searching standard locations."""
+    """Find the config file.
+
+    If an explicit path is given, use it (or raise if missing).
+    Otherwise fall back to the config bundled with the package.
+    """
     if path is not None:
         if path.is_file():
             return path
         raise ConfigError(f"Config file not found: {path}")
 
-    candidates = [
-        Path.cwd() / DEFAULT_CONFIG_FILENAME,
-        Path.home() / f".config/idea-gh/{DEFAULT_CONFIG_FILENAME}",
-    ]
-    for candidate in candidates:
-        if candidate.is_file():
-            return candidate
-
-    raise ConfigError(
-        f"No config file found. Searched:\n"
-        + "\n".join(f"  - {c}" for c in candidates)
-        + f"\n\nCreate an {DEFAULT_CONFIG_FILENAME} file or pass --config <path>."
-    )
+    return _BUNDLED_CONFIG
 
 
 def load_config(path: Path | None = None) -> Config:
