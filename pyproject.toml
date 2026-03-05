@@ -1,0 +1,55 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "gds-idea-gh-kit"
+version = "0.1.0"
+description = "CLI tool for auditing and enforcing GitHub repo standards for GDS IDEA teams"
+readme = "README.md"
+authors = [
+    { name = "David Gillespie", email = "david.gillespie@digital.cabinet-office.gov.uk" },
+]
+requires-python = ">=3.11"
+dependencies = [
+    "click>=8.0",
+    "httpx>=0.27",
+    "pydantic>=2.12.5",
+    "pyyaml>=6.0",
+]
+
+[project.scripts]
+idea-gh = "gds_idea_gh_kit.cli:cli"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/gds_idea_gh_kit"]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "pytest-httpx>=0.34",
+    "ruff>=0.8.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "N",   # pep8-naming
+    "UP",  # pyupgrade
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["gds_idea_gh_kit"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = [
+    "integration: tests that require GitHub API access (deselect with '-m \"not integration\"')",
+]

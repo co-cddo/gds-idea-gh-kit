@@ -1,0 +1,59 @@
+org: alphagov
+team_prefix: cddo
+default_visibility: private
+
+teams:
+  cddo-idea-admins: admin
+  cddo-idea-developers: write
+  cddo-idea-readers: read
+
+repo_settings:
+  delete_branch_on_merge: true
+  allow_squash_merge: true
+  allow_merge_commit: false
+  allow_rebase_merge: false
+  has_issues: true
+  has_wiki: false
+  has_projects: false
+
+required_files:
+  - .gitignore
+  - LICENSE
+  - README.md
+  - CODEOWNERS
+  - .github/dependabot.yml
+
+security:
+  vulnerability_alerts: true
+  automated_security_fixes: true
+
+repo_types:
+  cdk-app:
+    naming_pattern: "gds-idea-app-{name}"
+    default_branch: dev
+    branch_protection:
+      dev:
+        require_pr: true
+        required_approvals: 1
+        dismiss_stale_reviews: true
+        require_status_checks: [lint, test]
+        require_linear_history: true
+        enforce_admins: false
+        required_review_teams: [cddo-idea-developers]
+      prod:
+        require_pr: true
+        required_approvals: 1
+        require_status_checks: [lint, test]
+        enforce_admins: true
+        required_review_teams: [cddo-idea-admins]
+
+  python-package:
+    naming_pattern: "gds-idea-{name}"
+    default_branch: main
+    branch_protection:
+      main:
+        require_pr: true
+        required_approvals: 1
+        dismiss_stale_reviews: true
+        require_status_checks: [lint, test]
+        require_linear_history: true
