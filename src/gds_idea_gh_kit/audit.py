@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from gds_idea_gh_kit.checks import branches, files, naming, security, settings, teams
 from gds_idea_gh_kit.github_client import GitHubClient
-from gds_idea_gh_kit.models import AuditReport, CheckResult, CheckStatus, Config, RepoTypeConfig
+from gds_idea_gh_kit.models import AuditReport, CheckResult, CheckStatus, Config, FixReport, RepoTypeConfig
 
 
 def audit_repo(
@@ -73,6 +73,66 @@ def audit_repo(
     )
 
     return report
+
+
+def fix_repo(
+    owner: str,
+    repo: str,
+    config: Config,
+    client: GitHubClient,
+    repo_type: str | None = None,
+) -> FixReport:
+    """Apply auto-fixes for a single repo.
+
+    Calls fix() on each module that supports it (settings, teams,
+    branches, security).  Files and naming have no auto-fix.
+
+    Returns:
+        FixReport with the list of changes made and any errors.
+    """
+    if repo_type is None:
+        repo_type = config.detect_repo_type(repo)
+
+    fix_report = FixReport(
+        repo_name=f"{owner}/{repo}",
+        repo_type=repo_type or "unknown",
+    )
+
+    if repo_type is None:
+        fix_report.errors.append("Cannot fix: repo type not recognised.")
+        return fix_report
+
+    type_config = config.repo_types[repo_type]
+
+    # Settings
+    try:
+        changes = settings.fix(owner, repo, config.repo_settings, client)
+        fix_report.changes.extend(f"settings: {c}" for c in changes)
+    except Exception as e:
+        fix_report.errors.append(f"settings fix failed: {e}")
+
+    # Teams
+    try:
+        changes = teams.fix(owner, repo, config.teams, client)
+        fix_report.changes.extend(f"teams: {c}" for c in changes)
+    except Exception as e:
+        fix_report.errors.append(f"teams fix failed: {e}")
+
+    # Branches (default branch + rulesets)
+    try:
+        changes = branches.fix(owner, repo, type_config, client)
+        fix_report.changes.extend(f"branches: {c}" for c in changes)
+    except Exception as e:
+        fix_report.errors.append(f"branches fix failed: {e}")
+
+    # Security
+    try:
+        changes = security.fix(owner, repo, config.security, client)
+        fix_report.changes.extend(f"security: {c}" for c in changes)
+    except Exception as e:
+        fix_report.errors.append(f"security fix failed: {e}")
+
+    return fix_report
 
 
 def _render_result_lines(result: CheckResult, indent: str = "    ") -> list[str]:

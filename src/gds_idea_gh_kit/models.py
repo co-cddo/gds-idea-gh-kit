@@ -59,6 +59,15 @@ class AuditReport(BaseModel):
         return [r for r in self.results if r.status == CheckStatus.FAILED and r.fix_available]
 
 
+class FixReport(BaseModel):
+    """Results of applying fixes to a repo."""
+
+    repo_name: str
+    repo_type: str
+    changes: list[str] = Field(default_factory=list)
+    errors: list[str] = Field(default_factory=list)
+
+
 # --- Config models loaded from YAML ---
 
 

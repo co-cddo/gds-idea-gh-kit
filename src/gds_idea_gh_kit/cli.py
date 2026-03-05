@@ -48,15 +48,19 @@ def check_config(ctx: click.Context):
 @cli.command("audit")
 @click.option("--type", "repo_type", default=None, help="Override repo type detection.")
 @click.option("--all", "audit_all", is_flag=True, help="Audit all repos in the org.")
+@click.option("--fix", "apply_fix", is_flag=True, help="Auto-fix issues where possible.")
 @click.option("--verbose", is_flag=True, help="Show all checks including passing.")
 @click.pass_context
-def audit(ctx: click.Context, repo_type: str | None, audit_all: bool, verbose: bool):
+def audit(ctx: click.Context, repo_type: str | None, audit_all: bool, apply_fix: bool, verbose: bool):
     """Audit repo(s) against the configured standards.
 
     Run from inside a repo to audit that repo, or use --all to audit
     every repo in the org that matches a known naming pattern.
+
+    Use --fix to automatically correct issues where possible (settings,
+    teams, branch rulesets, security).
     """
-    from gds_idea_gh_kit.audit import audit_repo, render_report
+    from gds_idea_gh_kit.audit import audit_repo, fix_repo, render_report
     from gds_idea_gh_kit.config import ConfigError, load_config
     from gds_idea_gh_kit.github_client import GitHubClient
     from gds_idea_gh_kit.repo_info import RepoInfoError, get_repo_from_remote
@@ -74,7 +78,7 @@ def audit(ctx: click.Context, repo_type: str | None, audit_all: bool, verbose: b
 
     with GitHubClient(org=config.org) as client:
         if audit_all:
-            _audit_all_repos(config, client, repo_type, verbose=verbose)
+            _audit_all_repos(config, client, repo_type, apply_fix=apply_fix, verbose=verbose)
         else:
             try:
                 owner, repo = get_repo_from_remote()
@@ -90,12 +94,39 @@ def audit(ctx: click.Context, repo_type: str | None, audit_all: bool, verbose: b
                 )
 
             click.echo(render_report(report, verbose=verbose))
+
+            if apply_fix and report.fixable:
+                click.echo()
+                fix_result = fix_repo(owner, repo, config, client, report.repo_type)
+                _render_fix_result(fix_result)
+
+                # Re-audit to show updated state
+                click.echo()
+                report = audit_repo(owner, repo, config, client, report.repo_type)
+                click.echo(render_report(report, verbose=verbose))
+
             raise SystemExit(1 if report.failed > 0 else 0)
+
+
+def _render_fix_result(fix_result):
+    """Print the results of applying fixes."""
+    if fix_result.changes:
+        click.echo("Applied fixes:")
+        for change in fix_result.changes:
+            click.echo(f"  \u2713 {change}")
+
+    if fix_result.errors:
+        click.echo("Fix errors:")
+        for error in fix_result.errors:
+            click.echo(f"  \u2717 {error}")
+
+    if not fix_result.changes and not fix_result.errors:
+        click.echo("No fixes needed.")
 
 
 def _audit_all_repos(
     config: "Config", client: "GitHubClient", repo_type_filter: str | None,
-    verbose: bool = False,
+    apply_fix: bool = False, verbose: bool = False,
 ):
     """Audit all matching repos in the org."""
     repos = client.list_org_repos(config.org)
@@ -104,7 +135,7 @@ def _audit_all_repos(
     total_warnings = 0
     audited = 0
 
-    from gds_idea_gh_kit.audit import audit_repo, render_report
+    from gds_idea_gh_kit.audit import audit_repo, fix_repo, render_report
 
     for repo_data in repos:
         repo_name = repo_data["name"]
@@ -118,6 +149,17 @@ def _audit_all_repos(
 
         report = audit_repo(config.org, repo_name, config, client, detected_type)
         click.echo(render_report(report, verbose=verbose))
+
+        if apply_fix and report.fixable:
+            click.echo()
+            fix_result = fix_repo(config.org, repo_name, config, client, detected_type)
+            _render_fix_result(fix_result)
+
+            # Re-audit to show updated state
+            click.echo()
+            report = audit_repo(config.org, repo_name, config, client, detected_type)
+            click.echo(render_report(report, verbose=verbose))
+
         click.echo()
 
         total_passed += report.passed

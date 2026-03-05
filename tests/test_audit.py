@@ -1,8 +1,8 @@
-"""Tests for the audit orchestration and report rendering."""
+"""Tests for the audit orchestration, fix orchestration, and report rendering."""
 
 from pytest_httpx import HTTPXMock
 
-from gds_idea_gh_kit.audit import audit_repo, render_report
+from gds_idea_gh_kit.audit import audit_repo, fix_repo, render_report
 from gds_idea_gh_kit.github_client import GitHubClient
 from gds_idea_gh_kit.models import (
     AuditReport,
@@ -10,6 +10,7 @@ from gds_idea_gh_kit.models import (
     CheckResult,
     CheckStatus,
     Config,
+    FixReport,
     RepoSettings,
     RepoTypeConfig,
     SecurityConfig,
@@ -311,3 +312,139 @@ def test_render_report_multiline_message():
     )
     output = render_report(report)
     assert "Run: idea-gh rename" in output
+
+
+# --- fix_repo ---
+
+
+def _mock_fixable_repo(httpx_mock: HTTPXMock):
+    """Mock API calls for a repo with fixable settings and security issues."""
+    base = "https://api.github.com"
+
+    bad_repo = {
+        "name": "gds-idea-app-foo",
+        "default_branch": "dev",
+        "visibility": "private",
+        "delete_branch_on_merge": True,
+        "allow_squash_merge": True,
+        "allow_merge_commit": False,
+        "allow_rebase_merge": False,
+        "has_issues": True,
+        "has_wiki": True,  # wrong — should be False
+        "has_projects": False,
+    }
+
+    # settings.fix calls get_repo, then PATCH
+    httpx_mock.add_response(
+        url=f"{base}/repos/co-cddo/gds-idea-app-foo",
+        json=bad_repo,
+    )
+    httpx_mock.add_response(
+        url=f"{base}/repos/co-cddo/gds-idea-app-foo",
+        method="PATCH",
+        json={**bad_repo, "has_wiki": False},
+    )
+
+    # teams.fix: both teams already correct → no changes
+    httpx_mock.add_response(
+        url=f"{base}/orgs/co-cddo/teams/cddo-admins/repos/co-cddo/gds-idea-app-foo",
+        json={"role_name": "admin"},
+    )
+
+    # branches.fix: get_repo for default branch check
+    httpx_mock.add_response(
+        url=f"{base}/repos/co-cddo/gds-idea-app-foo",
+        json=bad_repo,
+    )
+    # classic protection check
+    httpx_mock.add_response(
+        url=f"{base}/repos/co-cddo/gds-idea-app-foo/branches/dev/protection",
+        status_code=404,
+    )
+    # find_ruleset_by_name: list rulesets, get ruleset detail
+    httpx_mock.add_response(
+        url=f"{base}/repos/co-cddo/gds-idea-app-foo/rulesets",
+        json=[{"id": 1, "name": "idea-gh: dev"}],
+    )
+    httpx_mock.add_response(
+        url=f"{base}/repos/co-cddo/gds-idea-app-foo/rulesets/1",
+        json={
+            "id": 1,
+            "name": "idea-gh: dev",
+            "enforcement": "active",
+            "rules": [
+                {"type": "deletion"},
+                {"type": "non_fast_forward"},
+                {
+                    "type": "pull_request",
+                    "parameters": {
+                        "required_approving_review_count": 1,
+                        "dismiss_stale_reviews_on_push": True,
+                    },
+                },
+                {
+                    "type": "required_status_checks",
+                    "parameters": {
+                        "required_status_checks": [{"context": "lint"}],
+                    },
+                },
+            ],
+            "bypass_actors": [],
+        },
+    )
+    # update_ruleset (PUT) — branches.fix always updates existing rulesets
+    httpx_mock.add_response(
+        url=f"{base}/repos/co-cddo/gds-idea-app-foo/rulesets/1",
+        method="PUT",
+        json={"id": 1, "name": "idea-gh: dev"},
+    )
+
+    # security.fix: vuln alerts disabled, automated fixes disabled
+    httpx_mock.add_response(
+        url=f"{base}/repos/co-cddo/gds-idea-app-foo/vulnerability-alerts",
+        method="GET",
+        status_code=404,  # not enabled
+    )
+    httpx_mock.add_response(
+        url=f"{base}/repos/co-cddo/gds-idea-app-foo/vulnerability-alerts",
+        method="PUT",
+        status_code=204,
+    )
+    httpx_mock.add_response(
+        url=f"{base}/repos/co-cddo/gds-idea-app-foo/automated-security-fixes",
+        method="GET",
+        json={"enabled": False},
+    )
+    httpx_mock.add_response(
+        url=f"{base}/repos/co-cddo/gds-idea-app-foo/automated-security-fixes",
+        method="PUT",
+        status_code=204,
+    )
+
+
+def test_fix_repo_applies_changes(httpx_mock: HTTPXMock, gh_client: GitHubClient):
+    config = _minimal_config()
+    _mock_fixable_repo(httpx_mock)
+
+    result = fix_repo("co-cddo", "gds-idea-app-foo", config, gh_client, "cdk-app")
+
+    assert isinstance(result, FixReport)
+    assert result.repo_type == "cdk-app"
+    assert len(result.errors) == 0
+
+    # Should have settings, branches, and security changes
+    change_text = "\n".join(result.changes)
+    assert "settings: has_wiki" in change_text
+    assert "branches: Updated ruleset" in change_text
+    assert "security: Enabled vulnerability alerts" in change_text
+    assert "security: Enabled automated security fixes" in change_text
+
+
+def test_fix_repo_unknown_type(gh_client: GitHubClient):
+    config = _minimal_config()
+    result = fix_repo("co-cddo", "unknown-repo", config, gh_client)
+
+    assert result.repo_type == "unknown"
+    assert len(result.errors) == 1
+    assert "not recognised" in result.errors[0]
+    assert len(result.changes) == 0
