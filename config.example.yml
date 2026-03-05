@@ -20,7 +20,6 @@ required_files:
   - .gitignore
   - LICENSE
   - README.md
-  - CODEOWNERS
   - .github/dependabot.yml
 
 security:
@@ -31,6 +30,7 @@ repo_types:
   cdk-app:
     naming_pattern: "gds-idea-app-{name}"
     default_branch: dev
+    required_workflows: [lint.yml, test.yml, cdk-deploy-dev.yml, cdk-deploy-prod.yml]
     branch_protection:
       dev:
         require_pr: true
@@ -56,6 +56,7 @@ repo_types:
   python-package:
     naming_pattern: "gds-idea-{name}"
     default_branch: main
+    required_workflows: [lint.yml, test.yml]
     branch_protection:
       main:
         require_pr: true

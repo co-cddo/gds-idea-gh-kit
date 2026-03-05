@@ -89,6 +89,8 @@ class RepoTypeConfig(BaseModel):
     naming_pattern: str
     default_branch: str
     branch_protection: dict[str, BranchProtectionConfig] = Field(default_factory=dict)
+    required_workflows: list[str] = Field(default_factory=list)
+    """Workflow filenames expected in .github/workflows/ (e.g. ['lint.yml', 'test.yml'])."""
 
     @field_validator("naming_pattern")
     @classmethod
