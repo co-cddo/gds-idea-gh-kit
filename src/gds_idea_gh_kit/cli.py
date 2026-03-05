@@ -45,6 +45,96 @@ def check_config(ctx: click.Context):
     click.echo(f"  Required files: {len(config.required_files)}")
 
 
+@cli.command("audit")
+@click.option("--type", "repo_type", default=None, help="Override repo type detection.")
+@click.option("--all", "audit_all", is_flag=True, help="Audit all repos in the org.")
+@click.pass_context
+def audit(ctx: click.Context, repo_type: str | None, audit_all: bool):
+    """Audit repo(s) against the configured standards.
+
+    Run from inside a repo to audit that repo, or use --all to audit
+    every repo in the org that matches a known naming pattern.
+    """
+    from gds_idea_gh_kit.audit import audit_repo, render_report
+    from gds_idea_gh_kit.config import ConfigError, load_config
+    from gds_idea_gh_kit.github_client import GitHubClient
+    from gds_idea_gh_kit.repo_info import RepoInfoError, get_repo_from_remote
+
+    try:
+        config = load_config(ctx.obj["config_path"])
+    except ConfigError as e:
+        raise click.ClickException(str(e))
+
+    if repo_type and repo_type not in config.repo_types:
+        raise click.ClickException(
+            f"Unknown repo type '{repo_type}'. "
+            f"Available: {', '.join(config.repo_types.keys())}"
+        )
+
+    with GitHubClient(org=config.org) as client:
+        if audit_all:
+            _audit_all_repos(config, client, repo_type)
+        else:
+            try:
+                owner, repo = get_repo_from_remote()
+            except RepoInfoError as e:
+                raise click.ClickException(str(e))
+
+            report = audit_repo(owner, repo, config, client, repo_type)
+
+            if report.repo_type == "unknown":
+                raise click.ClickException(
+                    f"Could not detect repo type for '{repo}'. "
+                    f"Use --type to specify one of: {', '.join(config.repo_types.keys())}"
+                )
+
+            click.echo(render_report(report))
+            raise SystemExit(1 if report.failed > 0 else 0)
+
+
+def _audit_all_repos(
+    config: "Config", client: "GitHubClient", repo_type_filter: str | None
+):
+    """Audit all matching repos in the org."""
+    repos = client.list_org_repos(config.org)
+    total_passed = 0
+    total_failed = 0
+    total_warnings = 0
+    audited = 0
+
+    from gds_idea_gh_kit.audit import audit_repo, render_report
+
+    for repo_data in repos:
+        repo_name = repo_data["name"]
+        detected_type = config.detect_repo_type(repo_name)
+
+        if detected_type is None:
+            continue
+
+        if repo_type_filter and detected_type != repo_type_filter:
+            continue
+
+        report = audit_repo(config.org, repo_name, config, client, detected_type)
+        click.echo(render_report(report))
+        click.echo()
+
+        total_passed += report.passed
+        total_failed += report.failed
+        total_warnings += report.warnings
+        audited += 1
+
+    if audited == 0:
+        click.echo("No matching repos found.")
+        return
+
+    click.echo("=" * 60)
+    click.echo(
+        f"Summary: {audited} repo(s) audited. "
+        f"{total_passed} passed, {total_failed} failed, {total_warnings} warnings."
+    )
+    raise SystemExit(1 if total_failed > 0 else 0)
+
+
 @cli.command("rename")
 @click.argument("new_name")
 @click.option("--yes", is_flag=True, help="Skip confirmation prompt.")
