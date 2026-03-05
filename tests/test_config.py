@@ -16,7 +16,6 @@ def test_load_example_config(tmp_path):
     config_file.write_text(
         """\
 org: co-cddo
-team_prefix: cddo
 default_visibility: private
 teams:
   cddo-idea-admins: admin
@@ -41,19 +40,17 @@ repo_types:
     )
     config = load_config(config_file)
     assert config.org == "co-cddo"
-    assert config.team_prefix == "cddo"
     assert "cddo-idea-admins" in config.teams
     assert "cdk-app" in config.repo_types
     assert config.repo_types["cdk-app"].default_branch == "dev"
 
 
 def test_load_minimal_config(tmp_path):
-    """Only org, team_prefix, and at least the required fields."""
+    """Only org is truly required."""
     config_file = tmp_path / "idea-gh.yml"
     config_file.write_text(
         """\
 org: myorg
-team_prefix: myteam
 """
     )
     config = load_config(config_file)
@@ -82,22 +79,17 @@ def test_load_empty_file(tmp_path):
 
 def test_missing_org():
     with pytest.raises(ValidationError, match="org"):
-        Config(team_prefix="cddo")
-
-
-def test_missing_team_prefix():
-    with pytest.raises(ValidationError, match="team_prefix"):
-        Config(org="co-cddo")
+        Config()
 
 
 def test_invalid_visibility():
     with pytest.raises(ValidationError, match="public.*private.*internal"):
-        Config(org="co-cddo", team_prefix="cddo", default_visibility="secret")
+        Config(org="co-cddo", default_visibility="secret")
 
 
 def test_invalid_team_permission():
     with pytest.raises(ValidationError, match="invalid permission"):
-        Config(org="co-cddo", team_prefix="cddo", teams={"myteam": "superadmin"})
+        Config(org="co-cddo", teams={"myteam": "superadmin"})
 
 
 def test_naming_pattern_requires_placeholder():
@@ -107,7 +99,7 @@ def test_naming_pattern_requires_placeholder():
 
 def test_extra_fields_rejected():
     with pytest.raises(ValidationError, match="extra"):
-        Config(org="co-cddo", team_prefix="cddo", bogus_field="oops")
+        Config(org="co-cddo", bogus_field="oops")
 
 
 # --- RepoTypeConfig matching ---
@@ -130,7 +122,6 @@ def test_extract_name():
 def test_detect_repo_type():
     config = Config(
         org="co-cddo",
-        team_prefix="cddo",
         repo_types={
             "cdk-app": RepoTypeConfig(
                 naming_pattern="gds-idea-app-{name}", default_branch="dev"

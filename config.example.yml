@@ -1,5 +1,4 @@
 org: co-cddo
-team_prefix: cddo
 default_visibility: private
 
 teams:
@@ -36,7 +35,6 @@ repo_types:
         require_pr: true
         required_approvals: 1
         dismiss_stale_reviews: true
-        require_status_checks: [lint, test]
         require_linear_history: true
         required_review_teams: [cddo-idea-developers]
         prevent_deletion: true
@@ -46,7 +44,6 @@ repo_types:
       prod:
         require_pr: true
         required_approvals: 1
-        require_status_checks: [lint, test]
         required_review_teams: [cddo-idea-admins]
         prevent_deletion: true
         prevent_force_push: true
@@ -62,7 +59,6 @@ repo_types:
         require_pr: true
         required_approvals: 1
         dismiss_stale_reviews: true
-        require_status_checks: [lint, test]
         require_linear_history: true
         prevent_deletion: true
         prevent_force_push: true

@@ -35,7 +35,6 @@ def _make_ruleset_response(
 def _full_rules(
     approvals=1,
     dismiss_stale=True,
-    contexts=None,
 ):
     """Build a typical set of rules for a protected branch."""
     return [
@@ -47,14 +46,6 @@ def _full_rules(
             "parameters": {
                 "required_approving_review_count": approvals,
                 "dismiss_stale_reviews_on_push": dismiss_stale,
-            },
-        },
-        {
-            "type": "required_status_checks",
-            "parameters": {
-                "required_status_checks": [
-                    {"context": c} for c in (contexts or [])
-                ],
             },
         },
     ]
@@ -143,7 +134,7 @@ def test_ruleset_all_pass(httpx_mock: HTTPXMock, gh_client: GitHubClient):
     httpx_mock.add_response(
         url="https://api.github.com/repos/co-cddo/my-repo/rulesets/42",
         json=_make_ruleset_response(
-            rules=_full_rules(approvals=1, contexts=["lint", "test"]),
+            rules=_full_rules(approvals=1),
         ),
     )
 
@@ -153,7 +144,6 @@ def test_ruleset_all_pass(httpx_mock: HTTPXMock, gh_client: GitHubClient):
         branch_protection={
             "dev": BranchProtectionConfig(
                 required_approvals=1,
-                require_status_checks=["lint", "test"],
                 require_linear_history=True,
                 prevent_deletion=True,
                 prevent_force_push=True,
@@ -287,7 +277,7 @@ def test_prod_branch_stricter_rules(httpx_mock: HTTPXMock, gh_client: GitHubClie
             name="idea-gh: prod",
             ruleset_id=99,
             branch="prod",
-            rules=_full_rules(approvals=1, dismiss_stale=True, contexts=["lint", "test"]),
+            rules=_full_rules(approvals=1, dismiss_stale=True),
             bypass_actors=[],
         ),
     )
@@ -298,7 +288,6 @@ def test_prod_branch_stricter_rules(httpx_mock: HTTPXMock, gh_client: GitHubClie
         branch_protection={
             "prod": BranchProtectionConfig(
                 required_approvals=1,
-                require_status_checks=["lint", "test"],
                 require_linear_history=True,
                 prevent_deletion=True,
                 prevent_force_push=True,

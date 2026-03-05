@@ -38,7 +38,6 @@ def check_config(ctx: click.Context):
 
     click.echo("Configuration is valid.")
     click.echo(f"  Org: {config.org}")
-    click.echo(f"  Team prefix: {config.team_prefix}")
     click.echo(f"  Visibility: {config.default_visibility}")
     click.echo(f"  Teams: {len(config.teams)}")
     click.echo(f"  Repo types: {', '.join(config.repo_types.keys())}")

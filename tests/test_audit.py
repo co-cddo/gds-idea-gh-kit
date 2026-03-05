@@ -20,7 +20,6 @@ from gds_idea_gh_kit.models import (
 def _minimal_config() -> Config:
     return Config(
         org="co-cddo",
-        team_prefix="cddo",
         teams={"cddo-admins": "admin"},
         repo_settings=RepoSettings(),
         required_files=[".gitignore"],
@@ -32,7 +31,6 @@ def _minimal_config() -> Config:
                 required_workflows=["lint.yml"],
                 branch_protection={
                     "dev": BranchProtectionConfig(
-                        require_status_checks=["lint"],
                         prevent_deletion=True,
                         prevent_force_push=True,
                     ),
@@ -109,12 +107,6 @@ def _mock_passing_repo(httpx_mock: HTTPXMock):
                     "parameters": {
                         "required_approving_review_count": 1,
                         "dismiss_stale_reviews_on_push": True,
-                    },
-                },
-                {
-                    "type": "required_status_checks",
-                    "parameters": {
-                        "required_status_checks": [{"context": "lint"}],
                     },
                 },
             ],
@@ -380,12 +372,6 @@ def _mock_fixable_repo(httpx_mock: HTTPXMock):
                     "parameters": {
                         "required_approving_review_count": 1,
                         "dismiss_stale_reviews_on_push": True,
-                    },
-                },
-                {
-                    "type": "required_status_checks",
-                    "parameters": {
-                        "required_status_checks": [{"context": "lint"}],
                     },
                 },
             ],

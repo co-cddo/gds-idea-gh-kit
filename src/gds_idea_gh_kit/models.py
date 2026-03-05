@@ -75,7 +75,6 @@ class BranchProtectionConfig(BaseModel):
     require_pr: bool = True
     required_approvals: int = 1
     dismiss_stale_reviews: bool = True
-    require_status_checks: list[str] = Field(default_factory=list)
     require_linear_history: bool = False
     required_review_teams: list[str] = Field(default_factory=list)
     """Teams that must review PRs to this branch (by slug, e.g. 'cddo-idea-admins')."""
@@ -137,7 +136,6 @@ class Config(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     org: str
-    team_prefix: str
     default_visibility: str = "private"
     teams: dict[str, str] = Field(default_factory=dict)
     repo_settings: RepoSettings = Field(default_factory=RepoSettings)

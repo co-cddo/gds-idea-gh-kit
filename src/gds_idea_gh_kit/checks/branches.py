@@ -235,49 +235,6 @@ def _audit_ruleset(
                     )
                 )
 
-    # --- Required status checks ---
-    sc_rule = actual_rules.get("required_status_checks")
-    if expected.require_status_checks:
-        if sc_rule is None:
-            results.append(
-                CheckResult(
-                    name=f"branches.ruleset.{branch}.status_checks",
-                    status=CheckStatus.FAILED,
-                    message=f"Branch '{branch}': status checks rule missing",
-                    fix_available=True,
-                )
-            )
-        else:
-            params = sc_rule.get("parameters", {})
-            actual_contexts = {
-                c["context"] for c in params.get("required_status_checks", [])
-            }
-            expected_contexts = set(expected.require_status_checks)
-            missing = expected_contexts - actual_contexts
-            if not missing:
-                results.append(
-                    CheckResult(
-                        name=f"branches.ruleset.{branch}.status_checks",
-                        status=CheckStatus.PASSED,
-                        message=(
-                            f"Branch '{branch}': status checks: "
-                            f"{', '.join(sorted(expected_contexts))}"
-                        ),
-                    )
-                )
-            else:
-                results.append(
-                    CheckResult(
-                        name=f"branches.ruleset.{branch}.status_checks",
-                        status=CheckStatus.FAILED,
-                        message=(
-                            f"Branch '{branch}': missing status checks: "
-                            f"{', '.join(sorted(missing))}"
-                        ),
-                        fix_available=True,
-                    )
-                )
-
     # --- Bypass actors ---
     actual_bypass = ruleset.get("bypass_actors", [])
     actual_bypass_team_ids = {
@@ -393,17 +350,6 @@ def _build_ruleset_payload(
             "required_review_thread_resolution": False,
         }
         rules.append({"type": "pull_request", "parameters": pr_params})
-
-    if bp.require_status_checks:
-        rules.append({
-            "type": "required_status_checks",
-            "parameters": {
-                "strict_required_status_checks_policy": True,
-                "required_status_checks": [
-                    {"context": ctx} for ctx in bp.require_status_checks
-                ],
-            },
-        })
 
     # Bypass actors
     bypass_actors = []
