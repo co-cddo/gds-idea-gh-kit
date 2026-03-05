@@ -9,11 +9,13 @@ from gds_idea_gh_kit.models import CheckResult, CheckStatus
 def audit(
     owner: str, repo: str, expected_teams: dict[str, str], client: GitHubClient
 ) -> list[CheckResult]:
-    """Check each expected team has the right permission on the repo."""
+    """Check each expected team has the right permission, and flag unexpected teams."""
     results = []
+    org = client.org or owner
 
+    # Check expected teams
     for team_slug, expected_perm in expected_teams.items():
-        actual_perm = client.get_team_repo_permission(client.org or owner, team_slug, owner, repo)
+        actual_perm = client.get_team_repo_permission(org, team_slug, owner, repo)
 
         if actual_perm is None:
             results.append(
@@ -43,6 +45,42 @@ def audit(
                     fix_available=True,
                 )
             )
+
+    # Flag unexpected teams
+    actual_teams = client.list_repo_teams(owner, repo)
+    for team in actual_teams:
+        slug = team["slug"]
+        if slug not in expected_teams:
+            permission = team.get("permission", "unknown")
+            results.append(
+                CheckResult(
+                    name=f"teams.unexpected.{slug}",
+                    status=CheckStatus.WARNING,
+                    message=(
+                        f"Team '{slug}' has '{permission}' access "
+                        f"but is not in config. Review and remove if unneeded."
+                    ),
+                )
+            )
+
+    # Flag direct collaborators (people added outside of teams)
+    direct_collabs = client.list_direct_collaborators(owner, repo)
+    for collab in direct_collabs:
+        username = collab["login"]
+        permission = collab.get("role_name", "unknown")
+        results.append(
+            CheckResult(
+                name=f"teams.direct_collaborator.{username}",
+                status=CheckStatus.WARNING,
+                message=(
+                    f"User '{username}' has direct '{permission}' access "
+                    f"(not via a team). Consider managing access through "
+                    f"teams instead.\n"
+                    f"  To remove all direct collaborators, run from inside the repo:\n"
+                    f"    idea-gh remove-collaborators"
+                ),
+            )
+        )
 
     return results
 

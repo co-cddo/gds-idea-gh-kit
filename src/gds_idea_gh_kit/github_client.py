@@ -117,7 +117,28 @@ class GitHubClient:
             page += 1
         return repos
 
+    # --- Collaborators ---
+
+    def list_direct_collaborators(self, owner: str, repo: str) -> list[dict]:
+        """List collaborators added directly to a repo (not via team membership).
+
+        Uses affiliation=direct to exclude team-based access.
+        """
+        return self._request(
+            "GET",
+            f"/repos/{owner}/{repo}/collaborators",
+            params={"affiliation": "direct"},
+        ).json()
+
+    def remove_collaborator(self, owner: str, repo: str, username: str) -> None:
+        """Remove a direct collaborator from a repo."""
+        self._request("DELETE", f"/repos/{owner}/{repo}/collaborators/{username}")
+
     # --- Teams ---
+
+    def list_repo_teams(self, owner: str, repo: str) -> list[dict]:
+        """List all teams with access to a repo."""
+        return self._request("GET", f"/repos/{owner}/{repo}/teams").json()
 
     def get_team_repo_permission(self, org: str, team_slug: str, owner: str, repo: str) -> str | None:
         """Get a team's permission on a repo. Returns None if not set."""
