@@ -133,16 +133,29 @@ def _audit_all_repos(
     apply_fix: bool = False, verbose: bool = False,
 ):
     """Audit all matching repos in the org."""
+    from gds_idea_gh_kit.audit import audit_repo, fix_repo, render_report
+    from gds_idea_gh_kit.github_client import GitHubClientError
+
     repos = client.list_org_repos(config.org)
     total_passed = 0
     total_failed = 0
     total_warnings = 0
     audited = 0
-
-    from gds_idea_gh_kit.audit import audit_repo, fix_repo, render_report
+    skipped = 0
 
     for repo_data in repos:
         repo_name = repo_data["name"]
+
+        # Only consider repos with a known prefix
+        if not config.has_known_prefix(repo_name):
+            continue
+
+        # Skip archived repos
+        if repo_data.get("archived", False):
+            click.echo(f"Skipping {repo_name} (archived)")
+            skipped += 1
+            continue
+
         detected_type = config.detect_repo_type(repo_name)
 
         if detected_type is None:
@@ -151,18 +164,27 @@ def _audit_all_repos(
         if repo_type_filter and detected_type != repo_type_filter:
             continue
 
-        report = audit_repo(config.org, repo_name, config, client, detected_type)
+        try:
+            report = audit_repo(config.org, repo_name, config, client, detected_type)
+        except GitHubClientError as e:
+            click.echo(f"Skipping {repo_name}: {e}")
+            skipped += 1
+            continue
+
         click.echo(render_report(report, verbose=verbose))
 
         if apply_fix and report.fixable:
             click.echo()
-            fix_result = fix_repo(config.org, repo_name, config, client, detected_type)
-            _render_fix_result(fix_result)
+            try:
+                fix_result = fix_repo(config.org, repo_name, config, client, detected_type)
+                _render_fix_result(fix_result)
 
-            # Re-audit to show updated state
-            click.echo()
-            report = audit_repo(config.org, repo_name, config, client, detected_type)
-            click.echo(render_report(report, verbose=verbose))
+                # Re-audit to show updated state
+                click.echo()
+                report = audit_repo(config.org, repo_name, config, client, detected_type)
+                click.echo(render_report(report, verbose=verbose))
+            except GitHubClientError as e:
+                click.echo(f"  Fix failed for {repo_name}: {e}")
 
         click.echo()
 
@@ -171,15 +193,16 @@ def _audit_all_repos(
         total_warnings += report.warnings
         audited += 1
 
-    if audited == 0:
+    if audited == 0 and skipped == 0:
         click.echo("No matching repos found.")
         return
 
     click.echo("=" * 60)
-    click.echo(
-        f"Summary: {audited} repo(s) audited. "
-        f"{total_passed} passed, {total_failed} failed, {total_warnings} warnings."
-    )
+    summary = f"Summary: {audited} repo(s) audited."
+    if skipped:
+        summary += f" {skipped} skipped."
+    summary += f" {total_passed} passed, {total_failed} failed, {total_warnings} warnings."
+    click.echo(summary)
     raise SystemExit(1 if total_failed > 0 else 0)
 
 
