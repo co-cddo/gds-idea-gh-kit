@@ -7,6 +7,31 @@ from gds_idea_gh_kit.github_client import GitHubClient
 from gds_idea_gh_kit.models import AuditReport, CheckResult, CheckStatus, Config, FixReport, RepoTypeConfig
 
 
+def detect_repo_type(
+    owner: str,
+    repo: str,
+    config: Config,
+    client: GitHubClient,
+) -> str | None:
+    """Detect repo type by checking for marker files via the GitHub API.
+
+    Iterates repo types in config order.  For each type, checks whether
+    ANY of its ``detection_files`` exist in the repo.  The first type
+    with a matching file wins.
+
+    Returns:
+        The repo type name (e.g. ``"cdk-app"``), or ``None`` if no type
+        matched.
+    """
+    for type_name, type_config in config.repo_types.items():
+        if not type_config.detection_files:
+            continue
+        for detection_file in type_config.detection_files:
+            if client.file_exists(owner, repo, detection_file):
+                return type_name
+    return None
+
+
 def audit_repo(
     owner: str,
     repo: str,
@@ -21,14 +46,15 @@ def audit_repo(
         repo: Repo name.
         config: Loaded tool config.
         client: Authenticated GitHub client.
-        repo_type: Override repo type detection. If None, detected from name.
+        repo_type: Override repo type detection. If None, detected from
+            files present in the repo.
 
     Returns:
         AuditReport with all check results.
     """
     # Detect or validate repo type
     if repo_type is None:
-        repo_type = config.detect_repo_type(repo)
+        repo_type = detect_repo_type(owner, repo, config, client)
 
     if repo_type is None:
         return AuditReport(
@@ -91,7 +117,7 @@ def fix_repo(
         FixReport with the list of changes made and any errors.
     """
     if repo_type is None:
-        repo_type = config.detect_repo_type(repo)
+        repo_type = detect_repo_type(owner, repo, config, client)
 
     fix_report = FixReport(
         repo_name=f"{owner}/{repo}",
