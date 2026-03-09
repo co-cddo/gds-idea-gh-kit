@@ -22,6 +22,7 @@ required_files:
   - .gitignore
   - LICENSE
   - README.md
+  - docs/README.md
   - .github/dependabot.yml
 
 security:
