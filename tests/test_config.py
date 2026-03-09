@@ -15,6 +15,10 @@ def test_load_bundled_config():
     config = load_config()
     assert config.org == "co-cddo"
     assert len(config.repo_types) > 0
+    assert len(config.repo_prefixes) > 0
+    # Each repo type should have detection files
+    for type_name, type_config in config.repo_types.items():
+        assert len(type_config.detection_files) > 0, f"{type_name} has no detection_files"
 
 
 def test_load_custom_config(tmp_path):
@@ -126,34 +130,10 @@ def test_extract_name():
     assert rt.extract_name("other-repo") is None
 
 
-def test_detect_repo_type():
-    config = Config(
-        org="co-cddo",
-        repo_types={
-            "cdk-app": RepoTypeConfig(
-                naming_pattern="gds-idea-app-{name}", default_branch="dev"
-            ),
-            "python-package": RepoTypeConfig(
-                naming_pattern="gds-idea-{name}", default_branch="main"
-            ),
-        },
-    )
-    assert config.detect_repo_type("gds-idea-app-foo") == "cdk-app"
-    assert config.detect_repo_type("gds-idea-utils") == "python-package"
-    assert config.detect_repo_type("random-repo") is None
-
-
-def test_repo_type_prefix():
-    rt = RepoTypeConfig(naming_pattern="gds-idea-app-{name}", default_branch="dev")
-    assert rt.prefix == "gds-idea-app-"
-
-    rt2 = RepoTypeConfig(naming_pattern="gds-idea-{name}", default_branch="main")
-    assert rt2.prefix == "gds-idea-"
-
-
 def test_has_known_prefix():
     config = Config(
         org="co-cddo",
+        repo_prefixes=["gds-idea-"],
         repo_types={
             "cdk-app": RepoTypeConfig(
                 naming_pattern="gds-idea-app-{name}", default_branch="dev"
@@ -165,6 +145,6 @@ def test_has_known_prefix():
     )
     assert config.has_known_prefix("gds-idea-app-foo") is True
     assert config.has_known_prefix("gds-idea-utils") is True
-    assert config.has_known_prefix("gds-idea-chai") is True  # prefix matches even if full pattern might not
+    assert config.has_known_prefix("gds-idea-chai") is True
     assert config.has_known_prefix("random-repo") is False
     assert config.has_known_prefix("something-else") is False

@@ -2,7 +2,7 @@
 
 from pytest_httpx import HTTPXMock
 
-from gds_idea_gh_kit.audit import audit_repo, fix_repo, render_report
+from gds_idea_gh_kit.audit import audit_repo, detect_repo_type, fix_repo, render_report
 from gds_idea_gh_kit.github_client import GitHubClient
 from gds_idea_gh_kit.models import (
     AuditReport,
@@ -20,6 +20,7 @@ from gds_idea_gh_kit.models import (
 def _minimal_config() -> Config:
     return Config(
         org="co-cddo",
+        repo_prefixes=["gds-idea-"],
         teams={"cddo-admins": "admin"},
         repo_settings=RepoSettings(),
         required_files=[".gitignore"],
@@ -27,6 +28,7 @@ def _minimal_config() -> Config:
         repo_types={
             "cdk-app": RepoTypeConfig(
                 naming_pattern="gds-idea-app-{name}",
+                detection_files=["cdk.json"],
                 default_branch="dev",
                 required_workflows=["lint.yml"],
                 branch_protection={
@@ -40,9 +42,16 @@ def _minimal_config() -> Config:
     )
 
 
-def _mock_passing_repo(httpx_mock: HTTPXMock):
+def _mock_passing_repo(httpx_mock: HTTPXMock, include_detection: bool = True):
     """Mock all API calls for a fully compliant repo."""
     base = "https://api.github.com"
+
+    # Detection: cdk.json exists → detected as cdk-app
+    if include_detection:
+        httpx_mock.add_response(
+            url=f"{base}/repos/co-cddo/gds-idea-app-foo/contents/cdk.json",
+            json={"name": "cdk.json"},
+        )
 
     repo_json = {
         "name": "gds-idea-app-foo",
@@ -148,6 +157,14 @@ def test_audit_repo_all_pass(httpx_mock: HTTPXMock, gh_client: GitHubClient):
 
 def test_audit_repo_unknown_type(httpx_mock: HTTPXMock, gh_client: GitHubClient):
     config = _minimal_config()
+
+    # Detection: cdk.json not found → no type detected
+    base = "https://api.github.com"
+    httpx_mock.add_response(
+        url=f"{base}/repos/co-cddo/unknown-repo/contents/cdk.json",
+        status_code=404,
+    )
+
     report = audit_repo("co-cddo", "unknown-repo", config, gh_client)
 
     assert report.repo_type == "unknown"
@@ -156,12 +173,117 @@ def test_audit_repo_unknown_type(httpx_mock: HTTPXMock, gh_client: GitHubClient)
 
 def test_audit_repo_explicit_type(httpx_mock: HTTPXMock, gh_client: GitHubClient):
     config = _minimal_config()
-    _mock_passing_repo(httpx_mock)
+    _mock_passing_repo(httpx_mock, include_detection=False)
 
-    # Force type even though the name matches anyway
+    # Force type — skips file-based detection
     report = audit_repo("co-cddo", "gds-idea-app-foo", config, gh_client, repo_type="cdk-app")
     assert report.repo_type == "cdk-app"
     assert report.failed == 0
+
+
+# --- detect_repo_type ---
+
+
+def _multi_type_config() -> Config:
+    """Config with both cdk-app and python-package types."""
+    return Config(
+        org="co-cddo",
+        repo_prefixes=["gds-idea-"],
+        teams={},
+        repo_settings=RepoSettings(),
+        required_files=[],
+        security=SecurityConfig(),
+        repo_types={
+            "cdk-app": RepoTypeConfig(
+                naming_pattern="gds-idea-app-{name}",
+                detection_files=["cdk.json"],
+                default_branch="dev",
+            ),
+            "python-package": RepoTypeConfig(
+                naming_pattern="gds-idea-{name}",
+                detection_files=["pyproject.toml"],
+                default_branch="main",
+            ),
+        },
+    )
+
+
+def test_detect_cdk_app(httpx_mock: HTTPXMock, gh_client: GitHubClient):
+    """Repo with cdk.json is detected as cdk-app."""
+    base = "https://api.github.com"
+    config = _multi_type_config()
+
+    httpx_mock.add_response(
+        url=f"{base}/repos/co-cddo/gds-idea-app-foo/contents/cdk.json",
+        json={"name": "cdk.json"},
+    )
+
+    assert detect_repo_type("co-cddo", "gds-idea-app-foo", config, gh_client) == "cdk-app"
+
+
+def test_detect_python_package(httpx_mock: HTTPXMock, gh_client: GitHubClient):
+    """Repo without cdk.json but with pyproject.toml is detected as python-package."""
+    base = "https://api.github.com"
+    config = _multi_type_config()
+
+    # cdk.json not found
+    httpx_mock.add_response(
+        url=f"{base}/repos/co-cddo/gds-idea-utils/contents/cdk.json",
+        status_code=404,
+    )
+    # pyproject.toml found
+    httpx_mock.add_response(
+        url=f"{base}/repos/co-cddo/gds-idea-utils/contents/pyproject.toml",
+        json={"name": "pyproject.toml"},
+    )
+
+    assert detect_repo_type("co-cddo", "gds-idea-utils", config, gh_client) == "python-package"
+
+
+def test_detect_cdk_app_wins_over_python_package(httpx_mock: HTTPXMock, gh_client: GitHubClient):
+    """Repo with both cdk.json and pyproject.toml is detected as cdk-app (first match wins)."""
+    base = "https://api.github.com"
+    config = _multi_type_config()
+
+    # cdk.json found — short-circuits, never checks pyproject.toml
+    httpx_mock.add_response(
+        url=f"{base}/repos/co-cddo/gds-idea-ai-pqs/contents/cdk.json",
+        json={"name": "cdk.json"},
+    )
+
+    assert detect_repo_type("co-cddo", "gds-idea-ai-pqs", config, gh_client) == "cdk-app"
+
+
+def test_detect_no_match(httpx_mock: HTTPXMock, gh_client: GitHubClient):
+    """Repo with no detection files returns None."""
+    base = "https://api.github.com"
+    config = _multi_type_config()
+
+    httpx_mock.add_response(
+        url=f"{base}/repos/co-cddo/gds-idea-docs/contents/cdk.json",
+        status_code=404,
+    )
+    httpx_mock.add_response(
+        url=f"{base}/repos/co-cddo/gds-idea-docs/contents/pyproject.toml",
+        status_code=404,
+    )
+
+    assert detect_repo_type("co-cddo", "gds-idea-docs", config, gh_client) is None
+
+
+def test_detect_misnamed_cdk_app(httpx_mock: HTTPXMock, gh_client: GitHubClient):
+    """A misnamed repo is still detected correctly from its files."""
+    base = "https://api.github.com"
+    config = _multi_type_config()
+
+    # gds-idea-ai-pqs has cdk.json despite not matching gds-idea-app-{name}
+    httpx_mock.add_response(
+        url=f"{base}/repos/co-cddo/gds-idea-ai-pqs/contents/cdk.json",
+        json={"name": "cdk.json"},
+    )
+
+    result = detect_repo_type("co-cddo", "gds-idea-ai-pqs", config, gh_client)
+    assert result == "cdk-app"
 
 
 # --- Report rendering ---
@@ -426,8 +548,16 @@ def test_fix_repo_applies_changes(httpx_mock: HTTPXMock, gh_client: GitHubClient
     assert "security: Enabled automated security fixes" in change_text
 
 
-def test_fix_repo_unknown_type(gh_client: GitHubClient):
+def test_fix_repo_unknown_type(httpx_mock: HTTPXMock, gh_client: GitHubClient):
     config = _minimal_config()
+
+    # Detection: cdk.json not found → no type detected
+    base = "https://api.github.com"
+    httpx_mock.add_response(
+        url=f"{base}/repos/co-cddo/unknown-repo/contents/cdk.json",
+        status_code=404,
+    )
+
     result = fix_repo("co-cddo", "unknown-repo", config, gh_client)
 
     assert result.repo_type == "unknown"

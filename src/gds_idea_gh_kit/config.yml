@@ -1,6 +1,9 @@
 org: co-cddo
 default_visibility: private
 
+repo_prefixes:
+  - gds-idea-
+
 teams:
   gds-idea-admins: admin
   gds-idea-developers: write
@@ -28,6 +31,7 @@ security:
 repo_types:
   cdk-app:
     naming_pattern: "gds-idea-app-{name}"
+    detection_files: [cdk.json]
     default_branch: dev
     required_workflows:
       [lint.yml, test.yml, cdk-deploy-dev.yml, cdk-deploy-prod.yml]
@@ -53,6 +57,7 @@ repo_types:
 
   python-package:
     naming_pattern: "gds-idea-{name}"
+    detection_files: [pyproject.toml]
     default_branch: main
     required_workflows: [lint.yml, test.yml]
     branch_protection:

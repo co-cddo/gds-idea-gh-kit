@@ -54,7 +54,7 @@ def audit(ctx: click.Context, repo_type: str | None, audit_all: bool, apply_fix:
     """Audit repo(s) against the configured standards.
 
     Run from inside a repo to audit that repo, or use --all to audit
-    every repo in the org that matches a known naming pattern.
+    every repo in the org that matches a known prefix.
 
     Use --fix to automatically correct issues where possible (settings,
     teams, branch rulesets, security).
@@ -133,7 +133,7 @@ def _audit_all_repos(
     apply_fix: bool = False, verbose: bool = False,
 ):
     """Audit all matching repos in the org."""
-    from gds_idea_gh_kit.audit import audit_repo, fix_repo, render_report
+    from gds_idea_gh_kit.audit import audit_repo, detect_repo_type, fix_repo, render_report
     from gds_idea_gh_kit.github_client import GitHubClientError
 
     repos = client.list_org_repos(config.org)
@@ -156,12 +156,16 @@ def _audit_all_repos(
             skipped += 1
             continue
 
-        detected_type = config.detect_repo_type(repo_name)
-
-        if detected_type is None:
+        try:
+            detected_type = repo_type_filter or detect_repo_type(
+                config.org, repo_name, config, client,
+            )
+        except GitHubClientError as e:
+            click.echo(f"Skipping {repo_name}: {e}")
+            skipped += 1
             continue
 
-        if repo_type_filter and detected_type != repo_type_filter:
+        if detected_type is None:
             continue
 
         try:
