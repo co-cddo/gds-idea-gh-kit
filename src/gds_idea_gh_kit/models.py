@@ -107,6 +107,11 @@ class RepoTypeConfig(BaseModel):
             raise ValueError("naming_pattern must contain '{name}' placeholder")
         return v
 
+    @property
+    def prefix(self) -> str:
+        """The fixed prefix before {name} in the naming pattern."""
+        return self.naming_pattern.split("{name}")[0]
+
     def matches_name(self, repo_name: str) -> bool:
         regex = re.escape(self.naming_pattern).replace(r"\{name\}", r"[a-z0-9][a-z0-9-]*")
         return bool(re.fullmatch(regex, repo_name))
@@ -167,3 +172,12 @@ class Config(BaseModel):
             if type_config.matches_name(repo_name):
                 return type_name
         return None
+
+    @property
+    def repo_prefixes(self) -> list[str]:
+        """All known repo name prefixes, derived from naming patterns."""
+        return [tc.prefix for tc in self.repo_types.values()]
+
+    def has_known_prefix(self, repo_name: str) -> bool:
+        """Check if a repo name starts with any known prefix."""
+        return any(repo_name.startswith(p) for p in self.repo_prefixes)
