@@ -141,3 +141,30 @@ def test_detect_repo_type():
     assert config.detect_repo_type("gds-idea-app-foo") == "cdk-app"
     assert config.detect_repo_type("gds-idea-utils") == "python-package"
     assert config.detect_repo_type("random-repo") is None
+
+
+def test_repo_type_prefix():
+    rt = RepoTypeConfig(naming_pattern="gds-idea-app-{name}", default_branch="dev")
+    assert rt.prefix == "gds-idea-app-"
+
+    rt2 = RepoTypeConfig(naming_pattern="gds-idea-{name}", default_branch="main")
+    assert rt2.prefix == "gds-idea-"
+
+
+def test_has_known_prefix():
+    config = Config(
+        org="co-cddo",
+        repo_types={
+            "cdk-app": RepoTypeConfig(
+                naming_pattern="gds-idea-app-{name}", default_branch="dev"
+            ),
+            "python-package": RepoTypeConfig(
+                naming_pattern="gds-idea-{name}", default_branch="main"
+            ),
+        },
+    )
+    assert config.has_known_prefix("gds-idea-app-foo") is True
+    assert config.has_known_prefix("gds-idea-utils") is True
+    assert config.has_known_prefix("gds-idea-chai") is True  # prefix matches even if full pattern might not
+    assert config.has_known_prefix("random-repo") is False
+    assert config.has_known_prefix("something-else") is False
