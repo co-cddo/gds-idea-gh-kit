@@ -130,6 +130,11 @@ def test_direct_collaborators_grouped(httpx_mock: HTTPXMock, gh_client: GitHubCl
             {"login": "bob-smith", "role_name": "admin"},
         ],
     )
+    # list_team_members for each configured team
+    httpx_mock.add_response(
+        url="https://api.github.com/orgs/co-cddo/teams/cddo-admins/members",
+        json=[{"login": "bob-smith"}],
+    )
 
     expected = {"cddo-admins": "admin"}
     results = teams.audit("co-cddo", "my-repo", expected, gh_client)
@@ -143,3 +148,47 @@ def test_direct_collaborators_grouped(httpx_mock: HTTPXMock, gh_client: GitHubCl
     assert "through teams instead" in msg
     assert "idea-gh remove-collaborators --all" in msg
     assert "idea-gh remove-collaborators <username>" in msg
+    # bob-smith is in cddo-admins
+    assert "bob-smith (admin) — member of: cddo-admins" in msg
+    # jane-doe is not in any configured team
+    assert "jane-doe (write) — not in any configured team" in msg
+
+
+def test_direct_collaborators_shows_multiple_teams(httpx_mock: HTTPXMock, gh_client: GitHubClient):
+    """A collaborator in multiple configured teams shows all of them."""
+    httpx_mock.add_response(
+        url="https://api.github.com/orgs/co-cddo/teams/cddo-admins/repos/co-cddo/my-repo",
+        json={"role_name": "admin"},
+    )
+    httpx_mock.add_response(
+        url="https://api.github.com/orgs/co-cddo/teams/cddo-devs/repos/co-cddo/my-repo",
+        json={"role_name": "write"},
+    )
+    httpx_mock.add_response(
+        url=TEAMS_URL,
+        json=[
+            {"slug": "cddo-admins", "permission": "admin"},
+            {"slug": "cddo-devs", "permission": "push"},
+        ],
+    )
+    httpx_mock.add_response(
+        url=COLLABS_URL,
+        json=[{"login": "alice", "role_name": "admin"}],
+    )
+    # alice is in both teams
+    httpx_mock.add_response(
+        url="https://api.github.com/orgs/co-cddo/teams/cddo-admins/members",
+        json=[{"login": "alice"}],
+    )
+    httpx_mock.add_response(
+        url="https://api.github.com/orgs/co-cddo/teams/cddo-devs/members",
+        json=[{"login": "alice"}],
+    )
+
+    expected = {"cddo-admins": "admin", "cddo-devs": "write"}
+    results = teams.audit("co-cddo", "my-repo", expected, gh_client)
+
+    warnings = [r for r in results if "direct_collaborator" in r.name]
+    assert len(warnings) == 1
+    msg = warnings[0].message
+    assert "alice (admin) — member of: cddo-admins, cddo-devs" in msg

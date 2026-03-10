@@ -66,10 +66,26 @@ def audit(
     # Flag direct collaborators (people added outside of teams)
     direct_collabs = client.list_direct_collaborators(owner, repo)
     if direct_collabs:
-        user_lines = "\n".join(
-            f"    - {c['login']} ({c.get('role_name', 'unknown')})"
-            for c in direct_collabs
-        )
+        # Look up which configured teams each collaborator belongs to
+        team_members: dict[str, set[str]] = {}
+        for team_slug in expected_teams:
+            try:
+                members = client.list_team_members(org, team_slug)
+                team_members[team_slug] = {m["login"] for m in members}
+            except Exception:
+                team_members[team_slug] = set()
+
+        user_lines = []
+        for c in direct_collabs:
+            login = c["login"]
+            role = c.get("role_name", "unknown")
+            member_of = [t for t in expected_teams if login in team_members.get(t, set())]
+            if member_of:
+                teams_str = ", ".join(member_of)
+                user_lines.append(f"    - {login} ({role}) — member of: {teams_str}")
+            else:
+                user_lines.append(f"    - {login} ({role}) — not in any configured team")
+
         results.append(
             CheckResult(
                 name="teams.direct_collaborators",
@@ -77,7 +93,7 @@ def audit(
                 message=(
                     f"{len(direct_collabs)} direct collaborator(s) found "
                     f"(not via a team):\n"
-                    f"{user_lines}\n"
+                    f"{chr(10).join(user_lines)}\n"
                     f"  Consider managing access through teams instead.\n"
                     f"  To remove specific users:\n"
                     f"    idea-gh remove-collaborators <username> [<username> ...]\n"

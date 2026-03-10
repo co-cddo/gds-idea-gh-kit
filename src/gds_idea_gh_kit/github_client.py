@@ -212,6 +212,10 @@ class GitHubClient:
             json={"permission": permission},
         )
 
+    def list_team_members(self, org: str, team_slug: str) -> list[dict]:
+        """List members of an org team."""
+        return self._request("GET", f"/orgs/{org}/teams/{team_slug}/members").json()
+
     # --- Branch protection (classic — for migration/cleanup) ---
 
     def get_branch_protection(self, owner: str, repo: str, branch: str) -> dict | None:
