@@ -5,6 +5,17 @@ from __future__ import annotations
 from gds_idea_gh_kit.github_client import GitHubClient
 from gds_idea_gh_kit.models import CheckResult, CheckStatus
 
+# The GitHub API uses different permission names for reading vs writing:
+#   GET returns role_name: read, write, admin, maintain, triage
+#   PUT expects:           pull, push,  admin, maintain, triage
+_PERM_TO_API = {
+    "read": "pull",
+    "write": "push",
+    "admin": "admin",
+    "maintain": "maintain",
+    "triage": "triage",
+}
+
 
 def audit(
     owner: str, repo: str, expected_teams: dict[str, str], client: GitHubClient
@@ -116,7 +127,8 @@ def fix(
     for team_slug, expected_perm in expected_teams.items():
         actual_perm = client.get_team_repo_permission(org, team_slug, owner, repo)
         if actual_perm != expected_perm:
-            client.set_team_repo_permission(org, team_slug, owner, repo, expected_perm)
+            api_perm = _PERM_TO_API.get(expected_perm, expected_perm)
+            client.set_team_repo_permission(org, team_slug, owner, repo, api_perm)
             changes.append(f"{team_slug}: {actual_perm} -> {expected_perm}")
 
     return changes
