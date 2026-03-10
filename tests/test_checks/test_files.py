@@ -96,3 +96,61 @@ def test_files_and_workflows_combined(httpx_mock: HTTPXMock, gh_client: GitHubCl
     results = files.audit("co-cddo", "my-repo", ["README.md"], ["lint.yml"], gh_client)
     assert len(results) == 2
     assert all(r.status == CheckStatus.PASSED for r in results)
+
+
+# --- Alternative files (OR logic) ---
+
+
+def test_alternative_first_exists(httpx_mock: HTTPXMock, gh_client: GitHubClient):
+    """When the first alternative exists, check passes without trying the second."""
+    httpx_mock.add_response(
+        url="https://api.github.com/repos/co-cddo/my-repo/contents/README.md",
+        json={"name": "README.md"},
+    )
+
+    results = files.audit(
+        "co-cddo", "my-repo", [["README.md", "docs/README.md"]], [], gh_client,
+    )
+    assert len(results) == 1
+    assert results[0].status == CheckStatus.PASSED
+    assert "README.md" in results[0].message
+
+
+def test_alternative_second_exists(httpx_mock: HTTPXMock, gh_client: GitHubClient):
+    """When only the second alternative exists, check still passes."""
+    httpx_mock.add_response(
+        url="https://api.github.com/repos/co-cddo/my-repo/contents/README.md",
+        status_code=404,
+    )
+    httpx_mock.add_response(
+        url="https://api.github.com/repos/co-cddo/my-repo/contents/docs/README.md",
+        json={"name": "README.md"},
+    )
+
+    results = files.audit(
+        "co-cddo", "my-repo", [["README.md", "docs/README.md"]], [], gh_client,
+    )
+    assert len(results) == 1
+    assert results[0].status == CheckStatus.PASSED
+    assert "docs/README.md" in results[0].message
+
+
+def test_alternative_none_exist(httpx_mock: HTTPXMock, gh_client: GitHubClient):
+    """When no alternative exists, check fails listing all options."""
+    httpx_mock.add_response(
+        url="https://api.github.com/repos/co-cddo/my-repo/contents/README.md",
+        status_code=404,
+    )
+    httpx_mock.add_response(
+        url="https://api.github.com/repos/co-cddo/my-repo/contents/docs/README.md",
+        status_code=404,
+    )
+
+    results = files.audit(
+        "co-cddo", "my-repo", [["README.md", "docs/README.md"]], [], gh_client,
+    )
+    assert len(results) == 1
+    assert results[0].status == CheckStatus.FAILED
+    assert "README.md" in results[0].message
+    assert "docs/README.md" in results[0].message
+    assert results[0].fix_available is False

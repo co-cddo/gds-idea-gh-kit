@@ -9,31 +9,61 @@ from gds_idea_gh_kit.models import CheckResult, CheckStatus
 def audit(
     owner: str,
     repo: str,
-    required_files: list[str],
+    required_files: list[str | list[str]],
     required_workflows: list[str],
     client: GitHubClient,
 ) -> list[CheckResult]:
-    """Check that each required file and workflow exists in the repo."""
+    """Check that each required file and workflow exists in the repo.
+
+    Entries in ``required_files`` can be a plain string (file must exist)
+    or a list of strings (at least one must exist — OR logic).
+    """
     results = []
 
-    for filepath in required_files:
-        if client.file_exists(owner, repo, filepath):
-            results.append(
-                CheckResult(
-                    name=f"files.{filepath}",
-                    status=CheckStatus.PASSED,
-                    message=f"Required file exists: {filepath}",
+    for entry in required_files:
+        if isinstance(entry, list):
+            # OR logic: pass if any alternative exists
+            found = None
+            for filepath in entry:
+                if client.file_exists(owner, repo, filepath):
+                    found = filepath
+                    break
+            label = " or ".join(entry)
+            if found:
+                results.append(
+                    CheckResult(
+                        name=f"files.{label}",
+                        status=CheckStatus.PASSED,
+                        message=f"Required file exists: {found}",
+                    )
                 )
-            )
+            else:
+                results.append(
+                    CheckResult(
+                        name=f"files.{label}",
+                        status=CheckStatus.FAILED,
+                        message=f"Required file missing: none of {', '.join(entry)} found",
+                        fix_available=False,
+                    )
+                )
         else:
-            results.append(
-                CheckResult(
-                    name=f"files.{filepath}",
-                    status=CheckStatus.FAILED,
-                    message=f"Required file missing: {filepath}",
-                    fix_available=False,
+            if client.file_exists(owner, repo, entry):
+                results.append(
+                    CheckResult(
+                        name=f"files.{entry}",
+                        status=CheckStatus.PASSED,
+                        message=f"Required file exists: {entry}",
+                    )
                 )
-            )
+            else:
+                results.append(
+                    CheckResult(
+                        name=f"files.{entry}",
+                        status=CheckStatus.FAILED,
+                        message=f"Required file missing: {entry}",
+                        fix_available=False,
+                    )
+                )
 
     for workflow in required_workflows:
         workflow_path = f".github/workflows/{workflow}"

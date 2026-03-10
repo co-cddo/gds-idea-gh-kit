@@ -143,7 +143,9 @@ class Config(BaseModel):
     """Prefixes used to filter repos in --all mode (e.g. ['gds-idea-'])."""
     teams: dict[str, str] = Field(default_factory=dict)
     repo_settings: RepoSettings = Field(default_factory=RepoSettings)
-    required_files: list[str] = Field(default_factory=list)
+    required_files: list[str | list[str]] = Field(default_factory=list)
+    """Required files. A string means the file must exist. A list of strings
+    means at least one of the alternatives must exist (OR logic)."""
     security: SecurityConfig = Field(default_factory=SecurityConfig)
     repo_types: dict[str, RepoTypeConfig] = Field(default_factory=dict)
 
