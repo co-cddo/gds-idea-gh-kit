@@ -5,9 +5,10 @@ repo_prefixes:
   - gds-idea-
 
 teams:
-  gds-idea-admins: admin
-  gds-idea-developers: write
-  gds-idea-readers: read
+  gds-idea-all: read
+  gds-idea-ds: maintain
+  gds-idea-senior-ds: admin
+  gds-idea-super-admin: admin
 
 repo_settings:
   delete_branch_on_merge: true
@@ -41,15 +42,15 @@ repo_types:
         required_approvals: 1
         dismiss_stale_reviews: true
         require_linear_history: true
-        required_review_teams: [cddo-idea-developers]
+        required_review_teams: [gds-idea-ds]
         prevent_deletion: true
         prevent_force_push: true
-        bypass_teams: [cddo-idea-superadmins]
+        bypass_teams: [gds-idea-super-admin]
         bypass_mode: pull_request
       prod:
         require_pr: true
         required_approvals: 1
-        required_review_teams: [cddo-idea-admins]
+        required_review_teams: [gds-idea-senior-ds]
         prevent_deletion: true
         prevent_force_push: true
         bypass_teams: []
@@ -66,5 +67,8 @@ repo_types:
         required_approvals: 1
         dismiss_stale_reviews: true
         require_linear_history: true
+        required_review_teams: [gds-idea-ds]
         prevent_deletion: true
         prevent_force_push: true
+        bypass_teams: [gds-idea-super-admin]
+        bypass_mode: pull_request
