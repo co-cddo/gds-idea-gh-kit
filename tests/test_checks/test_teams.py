@@ -192,3 +192,66 @@ def test_direct_collaborators_shows_multiple_teams(httpx_mock: HTTPXMock, gh_cli
     assert len(warnings) == 1
     msg = warnings[0].message
     assert "alice (admin) — member of: cddo-admins, cddo-devs" in msg
+
+
+# --- fix ---
+
+
+def test_fix_maps_read_to_pull(httpx_mock: HTTPXMock, gh_client: GitHubClient):
+    """Fix should send 'pull' to the API when config says 'read'."""
+    base = "https://api.github.com"
+
+    # Team has no access
+    httpx_mock.add_response(
+        url=f"{base}/orgs/co-cddo/teams/cddo-readers/repos/co-cddo/my-repo",
+        status_code=404,
+    )
+    # Expect PUT with 'pull' (not 'read')
+    httpx_mock.add_response(
+        url=f"{base}/orgs/co-cddo/teams/cddo-readers/repos/co-cddo/my-repo",
+        method="PUT",
+        status_code=204,
+    )
+
+    changes = teams.fix("co-cddo", "my-repo", {"cddo-readers": "read"}, gh_client)
+    assert len(changes) == 1
+    assert "cddo-readers" in changes[0]
+
+
+def test_fix_maps_write_to_push(httpx_mock: HTTPXMock, gh_client: GitHubClient):
+    """Fix should send 'push' to the API when config says 'write'."""
+    base = "https://api.github.com"
+
+    # Team has no access
+    httpx_mock.add_response(
+        url=f"{base}/orgs/co-cddo/teams/cddo-devs/repos/co-cddo/my-repo",
+        status_code=404,
+    )
+    # Expect PUT with 'push' (not 'write')
+    httpx_mock.add_response(
+        url=f"{base}/orgs/co-cddo/teams/cddo-devs/repos/co-cddo/my-repo",
+        method="PUT",
+        status_code=204,
+    )
+
+    changes = teams.fix("co-cddo", "my-repo", {"cddo-devs": "write"}, gh_client)
+    assert len(changes) == 1
+    assert "cddo-devs" in changes[0]
+
+
+def test_fix_passes_maintain_unchanged(httpx_mock: HTTPXMock, gh_client: GitHubClient):
+    """Fix should send 'maintain' as-is (no mapping needed)."""
+    base = "https://api.github.com"
+
+    httpx_mock.add_response(
+        url=f"{base}/orgs/co-cddo/teams/cddo-devs/repos/co-cddo/my-repo",
+        status_code=404,
+    )
+    httpx_mock.add_response(
+        url=f"{base}/orgs/co-cddo/teams/cddo-devs/repos/co-cddo/my-repo",
+        method="PUT",
+        status_code=204,
+    )
+
+    changes = teams.fix("co-cddo", "my-repo", {"cddo-devs": "maintain"}, gh_client)
+    assert len(changes) == 1
