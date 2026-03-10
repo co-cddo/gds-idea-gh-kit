@@ -77,7 +77,7 @@ class BranchProtectionConfig(BaseModel):
     dismiss_stale_reviews: bool = True
     require_linear_history: bool = False
     required_review_teams: list[str] = Field(default_factory=list)
-    """Teams that must review PRs to this branch (by slug, e.g. 'cddo-idea-admins')."""
+    """Teams that must review PRs to this branch (by slug, e.g. 'gds-idea-senior-ds')."""
     prevent_deletion: bool = True
     prevent_force_push: bool = True
     bypass_teams: list[str] = Field(default_factory=list)
