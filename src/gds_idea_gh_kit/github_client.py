@@ -193,10 +193,16 @@ class GitHubClient:
         return self._request("GET", f"/repos/{owner}/{repo}/teams").json()
 
     def get_team_repo_permission(self, org: str, team_slug: str, owner: str, repo: str) -> str | None:
-        """Get a team's permission on a repo. Returns None if not set."""
+        """Get a team's permission on a repo. Returns None if not set.
+
+        Requires the repository media type header to get a JSON response
+        with ``role_name`` instead of a bare 204 No Content.
+        """
         try:
             data = self._request(
-                "GET", f"/orgs/{org}/teams/{team_slug}/repos/{owner}/{repo}"
+                "GET",
+                f"/orgs/{org}/teams/{team_slug}/repos/{owner}/{repo}",
+                headers={"Accept": "application/vnd.github.v3.repository+json"},
             ).json()
             return data.get("role_name")
         except GitHubClientError:
