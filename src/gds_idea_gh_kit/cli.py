@@ -103,6 +103,7 @@ def audit(ctx: click.Context, repo_type: str | None, audit_all: bool, apply_fix:
                 click.echo()
                 fix_result = fix_repo(owner, repo, config, client, report.repo_type)
                 _render_fix_result(fix_result)
+                _handle_stale_branches(fix_result, owner, repo, client)
 
                 # Re-audit to show updated state
                 click.echo()
@@ -126,6 +127,55 @@ def _render_fix_result(fix_result):
 
     if not fix_result.changes and not fix_result.errors:
         click.echo("No fixes needed.")
+
+
+def _handle_stale_branches(fix_result, owner, repo, client):
+    """Prompt the user about stale branches left behind after a default branch change."""
+    for stale in fix_result.stale_branches:
+        click.echo()
+        if stale.is_merged:
+            click.echo(
+                f"Branch '{stale.branch}' is fully merged into "
+                f"'{stale.default_branch}' and is no longer needed."
+            )
+            if click.confirm(f"Delete '{stale.branch}'?", default=False):
+                client.delete_branch(owner, repo, stale.branch)
+                click.echo(f"  \u2713 Deleted branch '{stale.branch}'")
+            else:
+                click.echo(f"  Leaving '{stale.branch}' in place.")
+        else:
+            click.echo(
+                f"WARNING: Branch '{stale.branch}' has "
+                f"{stale.ahead_by} commit(s) not in '{stale.default_branch}'."
+            )
+            click.echo("Review these commits before deleting:")
+            click.echo(
+                f"  gh api repos/{owner}/{repo}/compare/"
+                f"{stale.default_branch}...{stale.branch} --jq '.commits[].commit.message'"
+            )
+            if click.confirm(f"Delete '{stale.branch}' anyway?", default=False):
+                client.delete_branch(owner, repo, stale.branch)
+                click.echo(f"  \u2713 Deleted branch '{stale.branch}'")
+            else:
+                click.echo(f"  Leaving '{stale.branch}' in place.")
+
+
+def _warn_stale_branches(fix_result, owner, repo):
+    """Print warnings about stale branches (non-interactive, for --all mode)."""
+    for stale in fix_result.stale_branches:
+        if stale.is_merged:
+            click.echo(
+                f"  ! Branch '{stale.branch}' is fully merged into "
+                f"'{stale.default_branch}' and can be deleted:"
+            )
+            click.echo(
+                f"    gh api -X DELETE repos/{owner}/{repo}/git/refs/heads/{stale.branch}"
+            )
+        else:
+            click.echo(
+                f"  ! Branch '{stale.branch}' has {stale.ahead_by} unmerged "
+                f"commit(s). Review and delete manually."
+            )
 
 
 def _audit_all_repos(
@@ -182,6 +232,7 @@ def _audit_all_repos(
             try:
                 fix_result = fix_repo(config.org, repo_name, config, client, detected_type)
                 _render_fix_result(fix_result)
+                _warn_stale_branches(fix_result, config.org, repo_name)
 
                 # Re-audit to show updated state
                 click.echo()

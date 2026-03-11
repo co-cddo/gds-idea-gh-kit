@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from gds_idea_gh_kit.github_client import GitHubClient
+from gds_idea_gh_kit.github_client import GitHubClient, GitHubClientError
 from gds_idea_gh_kit.models import (
     BranchProtectionConfig,
     CheckResult,
     CheckStatus,
     RepoTypeConfig,
+    StaleBranch,
 )
 
 RULESET_PREFIX = "idea-gh"
@@ -286,18 +287,43 @@ def _audit_ruleset(
 
 def fix(
     owner: str, repo: str, type_config: RepoTypeConfig, client: GitHubClient
-) -> list[str]:
-    """Apply default branch and ruleset fixes. Returns list of changes."""
-    changes = []
+) -> tuple[list[str], list[StaleBranch]]:
+    """Apply default branch and ruleset fixes.
+
+    Returns a tuple of (changes, stale_branches).  *stale_branches*
+    lists any branches that were superseded by the new default but
+    could not be renamed away (because the target already existed).
+    The caller is responsible for prompting the user about deletion.
+    """
+    changes: list[str] = []
+    stale_branches: list[StaleBranch] = []
     repo_data = client.get_repo(owner, repo)
     org = client.org or owner
+    old_default = repo_data["default_branch"]
+    new_default = type_config.default_branch
 
     # Fix default branch
-    if repo_data["default_branch"] != type_config.default_branch:
-        client.rename_default_branch(owner, repo, type_config.default_branch)
-        changes.append(
-            f"Default branch: {repo_data['default_branch']} -> {type_config.default_branch}"
-        )
+    if old_default != new_default:
+        client.rename_default_branch(owner, repo, new_default)
+        changes.append(f"Default branch: {old_default} -> {new_default}")
+
+        # Check if the old branch still exists (rename vs set-default).
+        # If rename succeeded, the old branch is gone.  If we fell back
+        # to set-default, it's still there and is now stale.
+        try:
+            client._request("GET", f"/repos/{owner}/{repo}/git/ref/heads/{old_default}")
+            # Old branch still exists — compare with new default
+            comparison = client.compare_branches(owner, repo, new_default, old_default)
+            stale_branches.append(
+                StaleBranch(
+                    branch=old_default,
+                    default_branch=new_default,
+                    ahead_by=comparison.get("ahead_by", 0),
+                )
+            )
+        except GitHubClientError:
+            # Old branch was renamed away — nothing stale
+            pass
 
     # Remove classic branch protection if present
     for branch_name in type_config.branch_protection:
@@ -319,7 +345,7 @@ def fix(
             client.create_ruleset(owner, repo, payload)
             changes.append(f"Created ruleset '{name}'")
 
-    return changes
+    return changes, stale_branches
 
 
 def build_ruleset_payload(
