@@ -55,6 +55,10 @@ class AuditReport(BaseModel):
         return sum(1 for r in self.results if r.status == CheckStatus.WARNING)
 
     @property
+    def skipped(self) -> int:
+        return sum(1 for r in self.results if r.status == CheckStatus.SKIPPED)
+
+    @property
     def fixable(self) -> list[CheckResult]:
         return [r for r in self.results if r.status == CheckStatus.FAILED and r.fix_available]
 

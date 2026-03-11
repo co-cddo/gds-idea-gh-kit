@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from gds_idea_gh_kit.github_client import GitHubClient
+from gds_idea_gh_kit.github_client import GitHubClient, GitHubClientError
 from gds_idea_gh_kit.models import CheckResult, CheckStatus
 
 # The GitHub API uses different permission names for reading vs writing:
@@ -58,24 +58,47 @@ def audit(
             )
 
     # Flag unexpected teams
-    actual_teams = client.list_repo_teams(owner, repo)
-    for team in actual_teams:
-        slug = team["slug"]
-        if slug not in expected_teams:
-            permission = team.get("permission", "unknown")
-            results.append(
-                CheckResult(
-                    name=f"teams.unexpected.{slug}",
-                    status=CheckStatus.WARNING,
-                    message=(
-                        f"Team '{slug}' has '{permission}' access "
-                        f"but is not in config. Review and remove if unneeded."
-                    ),
-                )
+    try:
+        actual_teams = client.list_repo_teams(owner, repo)
+    except GitHubClientError:
+        actual_teams = None
+        results.append(
+            CheckResult(
+                name="teams.unexpected",
+                status=CheckStatus.SKIPPED,
+                message="Unexpected-team check skipped.",
             )
+        )
+
+    if actual_teams is not None:
+        for team in actual_teams:
+            slug = team["slug"]
+            if slug not in expected_teams:
+                permission = team.get("permission", "unknown")
+                results.append(
+                    CheckResult(
+                        name=f"teams.unexpected.{slug}",
+                        status=CheckStatus.WARNING,
+                        message=(
+                            f"Team '{slug}' has '{permission}' access "
+                            f"but is not in config. Review and remove if unneeded."
+                        ),
+                    )
+                )
 
     # Flag direct collaborators (people added outside of teams)
-    direct_collabs = client.list_direct_collaborators(owner, repo)
+    try:
+        direct_collabs = client.list_direct_collaborators(owner, repo)
+    except GitHubClientError:
+        direct_collabs = None
+        results.append(
+            CheckResult(
+                name="teams.direct_collaborators",
+                status=CheckStatus.SKIPPED,
+                message="Direct-collaborator check skipped.",
+            )
+        )
+
     if direct_collabs:
         # Look up which configured teams each collaborator belongs to
         team_members: dict[str, set[str]] = {}
