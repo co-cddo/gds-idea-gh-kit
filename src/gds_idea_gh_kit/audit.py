@@ -190,14 +190,21 @@ def render_report(report: AuditReport, verbose: bool = False) -> str:
             lines.extend(_render_result_lines(result, indent="  "))
     else:
         # All passing — short summary
-        if report.failed == 0 and report.warnings == 0:
+        if report.failed == 0 and report.warnings == 0 and report.skipped == 0:
             lines.append(f"  All {report.passed} checks passed.")
             return "\n".join(lines)
 
         # Group results
+        skipped = [r for r in report.results if r.status == CheckStatus.SKIPPED]
         auto_fixable = [r for r in report.results if r.status == CheckStatus.FAILED and r.fix_available]
         manual_fix = [r for r in report.results if r.status == CheckStatus.FAILED and not r.fix_available]
         warnings = [r for r in report.results if r.status == CheckStatus.WARNING]
+
+        if skipped:
+            lines.append("  Skipped (admin access required):")
+            for result in skipped:
+                lines.extend(_render_result_lines(result))
+            lines.append("")
 
         if auto_fixable:
             lines.append("  Auto-fixable (run with --fix):")
@@ -217,10 +224,10 @@ def render_report(report: AuditReport, verbose: bool = False) -> str:
                 lines.extend(_render_result_lines(result))
             lines.append("")
 
-    lines.append(
-        f"  Result: {report.passed} passed, {report.failed} failed, "
-        f"{report.warnings} warning(s)"
-    )
+    summary = f"  Result: {report.passed} passed, {report.failed} failed, {report.warnings} warning(s)"
+    if report.skipped:
+        summary += f", {report.skipped} skipped"
+    lines.append(summary)
 
     if report.fixable:
         lines.append(f"  {len(report.fixable)} issue(s) can be auto-fixed with --fix")

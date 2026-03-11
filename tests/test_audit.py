@@ -428,6 +428,101 @@ def test_render_report_multiline_message():
     assert "Run: idea-gh rename" in output
 
 
+def test_render_report_skipped_section_shown():
+    """Skipped checks appear in their own section with admin access message."""
+    report = AuditReport(
+        repo_name="co-cddo/gds-idea-app-foo",
+        repo_type="cdk-app",
+        results=[
+            CheckResult(name="naming", status=CheckStatus.PASSED, message="Name matches"),
+            CheckResult(
+                name="teams.unexpected",
+                status=CheckStatus.SKIPPED,
+                message="Unexpected-team check skipped.",
+            ),
+            CheckResult(
+                name="teams.direct_collaborators",
+                status=CheckStatus.SKIPPED,
+                message="Direct-collaborator check skipped.",
+            ),
+        ],
+    )
+    output = render_report(report)
+    assert "Skipped (admin access required):" in output
+    assert "Unexpected-team check skipped" in output
+    assert "Direct-collaborator check skipped" in output
+    assert "2 skipped" in output
+
+
+def test_render_report_skipped_appears_first():
+    """Skipped section should appear before auto-fixable and warnings."""
+    report = AuditReport(
+        repo_name="co-cddo/gds-idea-app-foo",
+        repo_type="cdk-app",
+        results=[
+            CheckResult(
+                name="settings.wiki",
+                status=CheckStatus.FAILED,
+                message="Wiki: True (expected False)",
+                fix_available=True,
+            ),
+            CheckResult(
+                name="teams.unexpected",
+                status=CheckStatus.SKIPPED,
+                message="Unexpected-team check skipped.",
+            ),
+            CheckResult(
+                name="teams.extra",
+                status=CheckStatus.WARNING,
+                message="Extra team found",
+            ),
+        ],
+    )
+    output = render_report(report)
+    skipped_pos = output.index("Skipped")
+    auto_fix_pos = output.index("Auto-fixable")
+    warnings_pos = output.index("Warnings")
+    assert skipped_pos < auto_fix_pos < warnings_pos
+
+
+def test_render_report_all_passing_with_skipped():
+    """When all checks pass but some are skipped, the short summary should NOT appear."""
+    report = AuditReport(
+        repo_name="co-cddo/gds-idea-app-foo",
+        repo_type="cdk-app",
+        results=[
+            CheckResult(name="naming", status=CheckStatus.PASSED, message="Name matches"),
+            CheckResult(
+                name="teams.unexpected",
+                status=CheckStatus.SKIPPED,
+                message="Unexpected-team check skipped.",
+            ),
+        ],
+    )
+    output = render_report(report)
+    # Should NOT show "All N checks passed" since some were skipped
+    assert "All" not in output
+    assert "Skipped (admin access required):" in output
+    assert "1 passed, 0 failed, 0 warning(s), 1 skipped" in output
+
+
+def test_render_report_no_skipped_in_summary_when_zero():
+    """Summary line should omit skipped count when there are no skipped checks."""
+    report = AuditReport(
+        repo_name="co-cddo/gds-idea-app-foo",
+        repo_type="cdk-app",
+        results=[
+            CheckResult(
+                name="teams.unexpected",
+                status=CheckStatus.WARNING,
+                message="Unexpected team found",
+            ),
+        ],
+    )
+    output = render_report(report)
+    assert "skipped" not in output
+
+
 # --- fix_repo ---
 
 

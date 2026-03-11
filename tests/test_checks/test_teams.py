@@ -194,6 +194,74 @@ def test_direct_collaborators_shows_multiple_teams(httpx_mock: HTTPXMock, gh_cli
     assert "alice (admin) — member of: cddo-admins, cddo-devs" in msg
 
 
+def test_list_repo_teams_permission_denied(httpx_mock: HTTPXMock, gh_client: GitHubClient):
+    """Non-admin users get a SKIPPED result instead of a crash when listing teams fails."""
+    httpx_mock.add_response(
+        url="https://api.github.com/orgs/co-cddo/teams/cddo-admins/repos/co-cddo/my-repo",
+        json={"role_name": "admin"},
+    )
+    # Repo teams endpoint returns 404 for non-admins
+    httpx_mock.add_response(url=TEAMS_URL, status_code=404)
+    _mock_no_direct_collabs(httpx_mock)
+
+    expected = {"cddo-admins": "admin"}
+    results = teams.audit("co-cddo", "my-repo", expected, gh_client)
+
+    skipped = [r for r in results if r.status == CheckStatus.SKIPPED]
+    assert len(skipped) == 1
+    assert skipped[0].name == "teams.unexpected"
+    assert "skipped" in skipped[0].message.lower()
+
+    # Expected team check should still pass
+    passed = [r for r in results if r.status == CheckStatus.PASSED]
+    assert len(passed) == 1
+
+
+def test_list_direct_collaborators_permission_denied(httpx_mock: HTTPXMock, gh_client: GitHubClient):
+    """Non-admin users get a SKIPPED result instead of a crash when listing collaborators fails."""
+    httpx_mock.add_response(
+        url="https://api.github.com/orgs/co-cddo/teams/cddo-admins/repos/co-cddo/my-repo",
+        json={"role_name": "admin"},
+    )
+    httpx_mock.add_response(
+        url=TEAMS_URL,
+        json=[{"slug": "cddo-admins", "permission": "admin"}],
+    )
+    # Collaborators endpoint returns 404 for non-admins
+    httpx_mock.add_response(url=COLLABS_URL, status_code=404)
+
+    expected = {"cddo-admins": "admin"}
+    results = teams.audit("co-cddo", "my-repo", expected, gh_client)
+
+    skipped = [r for r in results if r.status == CheckStatus.SKIPPED]
+    assert len(skipped) == 1
+    assert skipped[0].name == "teams.direct_collaborators"
+    assert "skipped" in skipped[0].message.lower()
+
+
+def test_both_admin_checks_skipped_for_non_admin(httpx_mock: HTTPXMock, gh_client: GitHubClient):
+    """Both unexpected-teams and direct-collaborators skip gracefully for non-admins."""
+    httpx_mock.add_response(
+        url="https://api.github.com/orgs/co-cddo/teams/cddo-admins/repos/co-cddo/my-repo",
+        json={"role_name": "admin"},
+    )
+    # Both admin-only endpoints return 404
+    httpx_mock.add_response(url=TEAMS_URL, status_code=404)
+    httpx_mock.add_response(url=COLLABS_URL, status_code=404)
+
+    expected = {"cddo-admins": "admin"}
+    results = teams.audit("co-cddo", "my-repo", expected, gh_client)
+
+    skipped = [r for r in results if r.status == CheckStatus.SKIPPED]
+    assert len(skipped) == 2
+    skipped_names = {r.name for r in skipped}
+    assert skipped_names == {"teams.unexpected", "teams.direct_collaborators"}
+
+    # Expected team check should still pass
+    passed = [r for r in results if r.status == CheckStatus.PASSED]
+    assert len(passed) == 1
+
+
 # --- fix ---
 
 
