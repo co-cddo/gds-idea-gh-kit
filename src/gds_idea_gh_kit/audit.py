@@ -4,7 +4,13 @@ from __future__ import annotations
 
 from gds_idea_gh_kit.checks import branches, files, naming, security, settings, teams
 from gds_idea_gh_kit.github_client import GitHubClient
-from gds_idea_gh_kit.models import AuditReport, CheckResult, CheckStatus, Config, FixReport, RepoTypeConfig
+from gds_idea_gh_kit.models import (
+    AuditReport,
+    CheckResult,
+    CheckStatus,
+    Config,
+    FixReport,
+)
 
 
 def detect_repo_type(

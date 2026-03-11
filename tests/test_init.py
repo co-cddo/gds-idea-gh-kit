@@ -8,7 +8,11 @@ import pytest
 from pytest_httpx import HTTPXMock
 
 from gds_idea_gh_kit.github_client import GitHubClient
-from gds_idea_gh_kit.init import InitError, init_repo, _check_preconditions, get_repo_name_from_directory
+from gds_idea_gh_kit.init import (
+    InitError,
+    get_repo_name_from_directory,
+    init_repo,
+)
 from gds_idea_gh_kit.models import (
     BranchProtectionConfig,
     Config,

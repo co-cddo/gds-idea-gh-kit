@@ -6,7 +6,6 @@ from pydantic import ValidationError
 from gds_idea_gh_kit.config import ConfigError, load_config
 from gds_idea_gh_kit.models import Config, RepoTypeConfig
 
-
 # --- Loading from file ---
 
 

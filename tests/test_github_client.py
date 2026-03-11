@@ -1,6 +1,5 @@
 """Tests for GitHubClient.verify_connection()."""
 
-import time
 
 import httpx
 import pytest

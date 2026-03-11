@@ -7,7 +7,6 @@ from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-
 # --- Audit result models (plain pydantic, not settings) ---
 
 
