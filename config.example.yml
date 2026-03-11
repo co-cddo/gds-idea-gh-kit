@@ -34,7 +34,7 @@ repo_types:
     naming_pattern: "gds-idea-app-{name}"
     detection_files: [cdk.json]
     default_branch: dev
-    required_workflows: [ci_cd_cdk_app.yml]
+    required_workflows: [ci_cd_cdk_app.yml, ci_pr_cdk_app.yml]
     branch_protection:
       dev:
         require_pr: true

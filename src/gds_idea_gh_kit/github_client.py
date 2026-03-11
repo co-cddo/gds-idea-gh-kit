@@ -328,3 +328,22 @@ class GitHubClient:
             f"/repos/{owner}/{repo}/branches/{current}/rename",
             json={"new_name": new_name},
         ).json()
+
+    def create_branch(self, owner: str, repo: str, branch: str, from_branch: str) -> dict:
+        """Create a new branch from an existing branch.
+
+        Uses the Git Refs API to create a ref pointing at the same commit
+        as *from_branch*.
+        """
+        # Get the SHA of the source branch
+        ref_data = self._request(
+            "GET", f"/repos/{owner}/{repo}/git/ref/heads/{from_branch}"
+        ).json()
+        sha = ref_data["object"]["sha"]
+
+        # Create the new branch ref
+        return self._request(
+            "POST",
+            f"/repos/{owner}/{repo}/git/refs",
+            json={"ref": f"refs/heads/{branch}", "sha": sha},
+        ).json()
