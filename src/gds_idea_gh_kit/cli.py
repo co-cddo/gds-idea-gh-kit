@@ -3,8 +3,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import click
+
+if TYPE_CHECKING:
+    from gds_idea_gh_kit.github_client import GitHubClient
+    from gds_idea_gh_kit.models import Config
 
 from gds_idea_gh_kit import __version__
 
@@ -179,7 +184,7 @@ def _warn_stale_branches(fix_result, owner, repo):
 
 
 def _audit_all_repos(
-    config: "Config", client: "GitHubClient", repo_type_filter: str | None,
+    config: Config, client: GitHubClient, repo_type_filter: str | None,
     apply_fix: bool = False, verbose: bool = False,
 ):
     """Audit all matching repos in the org."""
@@ -314,7 +319,7 @@ def init(ctx: click.Context, repo_type: str):
         for step in steps:
             click.echo(f"  \u2713 {step}")
 
-        click.echo(f"\nDone! Verify with: idea-gh audit --verbose")
+        click.echo("\nDone! Verify with: idea-gh audit --verbose")
 
 
 @cli.command("rename")
