@@ -140,30 +140,32 @@ def test_rename_default_branch_renames(httpx_mock: HTTPXMock):
     assert result["name"] == "dev"
 
 
-def test_rename_default_branch_falls_back_when_target_exists(httpx_mock: HTTPXMock):
-    """When target branch already exists, fall back to setting default via PATCH."""
+# --- compare_branches ---
+
+
+def test_compare_branches(httpx_mock: HTTPXMock):
     httpx_mock.add_response(
-        url=f"{BASE}/repos/co-cddo/my-repo",
-        method="GET",
-        json={"default_branch": "main"},
-    )
-    # Rename fails — target branch already exists
-    httpx_mock.add_response(
-        url=f"{BASE}/repos/co-cddo/my-repo/branches/main/rename",
-        method="POST",
-        status_code=422,
-        json={"message": "Validation Failed", "errors": ["New branch already exists"]},
-    )
-    # Falls back to PATCH to set default branch
-    httpx_mock.add_response(
-        url=f"{BASE}/repos/co-cddo/my-repo",
-        method="PATCH",
-        json={"default_branch": "dev"},
+        url=f"{BASE}/repos/co-cddo/my-repo/compare/dev...main",
+        json={"ahead_by": 3, "behind_by": 0, "status": "ahead"},
     )
 
     client = GitHubClient(token="fake-token", org="co-cddo")
-    result = client.rename_default_branch("co-cddo", "my-repo", "dev")
-    assert result["default_branch"] == "dev"
+    result = client.compare_branches("co-cddo", "my-repo", "dev", "main")
+    assert result["ahead_by"] == 3
+
+
+# --- delete_branch ---
+
+
+def test_delete_branch(httpx_mock: HTTPXMock):
+    httpx_mock.add_response(
+        url=f"{BASE}/repos/co-cddo/my-repo/git/refs/heads/main",
+        method="DELETE",
+        status_code=204,
+    )
+
+    client = GitHubClient(token="fake-token", org="co-cddo")
+    client.delete_branch("co-cddo", "my-repo", "main")  # should not raise
 
 
 def test_rename_default_branch_noop_when_already_correct(httpx_mock: HTTPXMock):

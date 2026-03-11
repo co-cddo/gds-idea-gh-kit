@@ -356,3 +356,18 @@ class GitHubClient:
             f"/repos/{owner}/{repo}/git/refs",
             json={"ref": f"refs/heads/{branch}", "sha": sha},
         ).json()
+
+    def compare_branches(self, owner: str, repo: str, base: str, head: str) -> dict:
+        """Compare two branches.
+
+        Returns the comparison data including ``ahead_by`` and
+        ``behind_by`` counts.  ``ahead_by`` is the number of commits
+        in *head* that are not in *base*.
+        """
+        return self._request(
+            "GET", f"/repos/{owner}/{repo}/compare/{base}...{head}"
+        ).json()
+
+    def delete_branch(self, owner: str, repo: str, branch: str) -> None:
+        """Delete a branch via the Git Refs API."""
+        self._request("DELETE", f"/repos/{owner}/{repo}/git/refs/heads/{branch}")

@@ -146,8 +146,9 @@ def fix_repo(
 
     # Branches (default branch + rulesets)
     try:
-        changes = branches.fix(owner, repo, type_config, client)
+        changes, stale = branches.fix(owner, repo, type_config, client)
         fix_report.changes.extend(f"branches: {c}" for c in changes)
+        fix_report.stale_branches.extend(stale)
     except Exception as e:
         fix_report.errors.append(f"branches fix failed: {e}")
 

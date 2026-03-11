@@ -63,6 +63,19 @@ class AuditReport(BaseModel):
         return [r for r in self.results if r.status == CheckStatus.FAILED and r.fix_available]
 
 
+class StaleBranch(BaseModel):
+    """A branch left behind after changing the default branch."""
+
+    branch: str
+    default_branch: str
+    ahead_by: int = 0
+    """Commits on this branch not in the default branch."""
+
+    @property
+    def is_merged(self) -> bool:
+        return self.ahead_by == 0
+
+
 class FixReport(BaseModel):
     """Results of applying fixes to a repo."""
 
@@ -70,6 +83,7 @@ class FixReport(BaseModel):
     repo_type: str
     changes: list[str] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)
+    stale_branches: list[StaleBranch] = Field(default_factory=list)
 
 
 # --- Config models loaded from YAML ---

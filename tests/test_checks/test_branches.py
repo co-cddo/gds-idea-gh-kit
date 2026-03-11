@@ -298,3 +298,235 @@ def test_prod_branch_stricter_rules(httpx_mock: HTTPXMock, gh_client: GitHubClie
     results = branches.audit("co-cddo", "my-repo", type_config, gh_client)
     failed = [r for r in results if r.status == CheckStatus.FAILED]
     assert len(failed) == 0
+
+
+# --- Fix: stale branch detection ---
+
+BASE = "https://api.github.com"
+
+
+def _type_config_with_dev_default():
+    return RepoTypeConfig(
+        naming_pattern="gds-idea-app-{name}",
+        default_branch="dev",
+        branch_protection={
+            "dev": BranchProtectionConfig(
+                prevent_deletion=True,
+                prevent_force_push=True,
+                require_pr=False,
+            ),
+        },
+    )
+
+
+def test_fix_rename_succeeds_no_stale_branch(httpx_mock: HTTPXMock, gh_client: GitHubClient):
+    """When rename succeeds (main -> dev), no stale branch is reported."""
+    # get_repo (called by fix)
+    httpx_mock.add_response(
+        url=f"{BASE}/repos/co-cddo/my-repo",
+        method="GET",
+        json={"default_branch": "main"},
+    )
+    # get_repo (called again by rename_default_branch)
+    httpx_mock.add_response(
+        url=f"{BASE}/repos/co-cddo/my-repo",
+        method="GET",
+        json={"default_branch": "main"},
+    )
+    # rename succeeds
+    httpx_mock.add_response(
+        url=f"{BASE}/repos/co-cddo/my-repo/branches/main/rename",
+        method="POST",
+        json={"name": "dev"},
+    )
+    # check if old branch exists — 404 means it was renamed away
+    httpx_mock.add_response(
+        url=f"{BASE}/repos/co-cddo/my-repo/git/ref/heads/main",
+        method="GET",
+        status_code=404,
+    )
+    # no classic protection
+    httpx_mock.add_response(
+        url=f"{BASE}/repos/co-cddo/my-repo/branches/dev/protection",
+        status_code=404,
+    )
+    # no existing rulesets
+    httpx_mock.add_response(
+        url=f"{BASE}/repos/co-cddo/my-repo/rulesets",
+        json=[],
+    )
+    # create ruleset
+    httpx_mock.add_response(
+        url=f"{BASE}/repos/co-cddo/my-repo/rulesets",
+        method="POST",
+        json={"id": 1, "name": "idea-gh: dev"},
+        status_code=201,
+    )
+
+    type_config = _type_config_with_dev_default()
+    changes, stale_branches = branches.fix("co-cddo", "my-repo", type_config, gh_client)
+
+    assert any("main -> dev" in c for c in changes)
+    assert len(stale_branches) == 0
+
+
+def test_fix_fallback_reports_stale_merged_branch(httpx_mock: HTTPXMock, gh_client: GitHubClient):
+    """When rename falls back to set-default, stale branch is reported with merge status."""
+    # get_repo (called by fix)
+    httpx_mock.add_response(
+        url=f"{BASE}/repos/co-cddo/my-repo",
+        method="GET",
+        json={"default_branch": "main"},
+    )
+    # get_repo (called again by rename_default_branch)
+    httpx_mock.add_response(
+        url=f"{BASE}/repos/co-cddo/my-repo",
+        method="GET",
+        json={"default_branch": "main"},
+    )
+    # rename fails — dev already exists
+    httpx_mock.add_response(
+        url=f"{BASE}/repos/co-cddo/my-repo/branches/main/rename",
+        method="POST",
+        status_code=422,
+        json={"message": "Validation Failed"},
+    )
+    # fallback to PATCH
+    httpx_mock.add_response(
+        url=f"{BASE}/repos/co-cddo/my-repo",
+        method="PATCH",
+        json={"default_branch": "dev"},
+    )
+    # old branch still exists
+    httpx_mock.add_response(
+        url=f"{BASE}/repos/co-cddo/my-repo/git/ref/heads/main",
+        method="GET",
+        json={"object": {"sha": "abc123"}},
+    )
+    # compare: main is fully merged into dev
+    httpx_mock.add_response(
+        url=f"{BASE}/repos/co-cddo/my-repo/compare/dev...main",
+        json={"ahead_by": 0, "behind_by": 5},
+    )
+    # no classic protection
+    httpx_mock.add_response(
+        url=f"{BASE}/repos/co-cddo/my-repo/branches/dev/protection",
+        status_code=404,
+    )
+    # no existing rulesets
+    httpx_mock.add_response(
+        url=f"{BASE}/repos/co-cddo/my-repo/rulesets",
+        json=[],
+    )
+    # create ruleset
+    httpx_mock.add_response(
+        url=f"{BASE}/repos/co-cddo/my-repo/rulesets",
+        method="POST",
+        json={"id": 1, "name": "idea-gh: dev"},
+        status_code=201,
+    )
+
+    type_config = _type_config_with_dev_default()
+    changes, stale_branches = branches.fix("co-cddo", "my-repo", type_config, gh_client)
+
+    assert any("main -> dev" in c for c in changes)
+    assert len(stale_branches) == 1
+    assert stale_branches[0].branch == "main"
+    assert stale_branches[0].default_branch == "dev"
+    assert stale_branches[0].is_merged is True
+
+
+def test_fix_fallback_reports_stale_unmerged_branch(httpx_mock: HTTPXMock, gh_client: GitHubClient):
+    """When main has unmerged commits, stale branch reports ahead_by count."""
+    # get_repo (called by fix)
+    httpx_mock.add_response(
+        url=f"{BASE}/repos/co-cddo/my-repo",
+        method="GET",
+        json={"default_branch": "main"},
+    )
+    # get_repo (called again by rename_default_branch)
+    httpx_mock.add_response(
+        url=f"{BASE}/repos/co-cddo/my-repo",
+        method="GET",
+        json={"default_branch": "main"},
+    )
+    # rename fails
+    httpx_mock.add_response(
+        url=f"{BASE}/repos/co-cddo/my-repo/branches/main/rename",
+        method="POST",
+        status_code=422,
+        json={"message": "Validation Failed"},
+    )
+    # fallback to PATCH
+    httpx_mock.add_response(
+        url=f"{BASE}/repos/co-cddo/my-repo",
+        method="PATCH",
+        json={"default_branch": "dev"},
+    )
+    # old branch still exists
+    httpx_mock.add_response(
+        url=f"{BASE}/repos/co-cddo/my-repo/git/ref/heads/main",
+        method="GET",
+        json={"object": {"sha": "abc123"}},
+    )
+    # compare: main has 3 unmerged commits
+    httpx_mock.add_response(
+        url=f"{BASE}/repos/co-cddo/my-repo/compare/dev...main",
+        json={"ahead_by": 3, "behind_by": 10},
+    )
+    # no classic protection
+    httpx_mock.add_response(
+        url=f"{BASE}/repos/co-cddo/my-repo/branches/dev/protection",
+        status_code=404,
+    )
+    # no existing rulesets
+    httpx_mock.add_response(
+        url=f"{BASE}/repos/co-cddo/my-repo/rulesets",
+        json=[],
+    )
+    # create ruleset
+    httpx_mock.add_response(
+        url=f"{BASE}/repos/co-cddo/my-repo/rulesets",
+        method="POST",
+        json={"id": 1, "name": "idea-gh: dev"},
+        status_code=201,
+    )
+
+    type_config = _type_config_with_dev_default()
+    changes, stale_branches = branches.fix("co-cddo", "my-repo", type_config, gh_client)
+
+    assert len(stale_branches) == 1
+    assert stale_branches[0].branch == "main"
+    assert stale_branches[0].ahead_by == 3
+    assert stale_branches[0].is_merged is False
+
+
+def test_fix_no_stale_when_default_already_correct(httpx_mock: HTTPXMock, gh_client: GitHubClient):
+    """When default branch is already correct, no stale branch check needed."""
+    httpx_mock.add_response(
+        url=f"{BASE}/repos/co-cddo/my-repo",
+        method="GET",
+        json={"default_branch": "dev"},
+    )
+    # no classic protection
+    httpx_mock.add_response(
+        url=f"{BASE}/repos/co-cddo/my-repo/branches/dev/protection",
+        status_code=404,
+    )
+    # no existing rulesets
+    httpx_mock.add_response(
+        url=f"{BASE}/repos/co-cddo/my-repo/rulesets",
+        json=[],
+    )
+    # create ruleset
+    httpx_mock.add_response(
+        url=f"{BASE}/repos/co-cddo/my-repo/rulesets",
+        method="POST",
+        json={"id": 1, "name": "idea-gh: dev"},
+        status_code=201,
+    )
+
+    type_config = _type_config_with_dev_default()
+    changes, stale_branches = branches.fix("co-cddo", "my-repo", type_config, gh_client)
+
+    assert len(stale_branches) == 0
