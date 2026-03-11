@@ -1,0 +1,47 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Get version from pyproject.toml
+        id: version
+        run: |
+          VERSION=$(grep '^version' pyproject.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Create tag and release
+        run: |
+          gh release create "${{ steps.version.outputs.tag }}" \
+            --title "${{ steps.version.outputs.tag }}" \
+            --generate-notes
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: astral-sh/setup-uv@v7
+
+      - name: Build wheel and sdist
+        run: uv build
+
+      - name: Upload artifacts to release
+        run: gh release upload "${{ steps.version.outputs.tag }}" dist/*.whl dist/*.tar.gz
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Uncomment when PYPI_INDEX_TOKEN is available
+      # - name: Trigger PyPI index rebuild
+      #   run: |
+      #     gh api repos/co-cddo/gds-idea-pypi/dispatches \
+      #       -f event_type=rebuild-index
+      #   env:
+      #     GH_TOKEN: ${{ secrets.PYPI_INDEX_TOKEN }}
