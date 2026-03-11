@@ -332,9 +332,7 @@ class GitHubClient:
         ``behind_by`` counts.  ``ahead_by`` is the number of commits
         in *head* that are not in *base*.
         """
-        return self._request(
-            "GET", f"/repos/{owner}/{repo}/compare/{base}...{head}"
-        ).json()
+        return self._request("GET", f"/repos/{owner}/{repo}/compare/{base}...{head}").json()
 
     def delete_branch(self, owner: str, repo: str, branch: str) -> None:
         """Delete a branch via the Git Refs API."""

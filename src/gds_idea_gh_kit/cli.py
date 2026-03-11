@@ -137,8 +137,7 @@ def _handle_stale_branches(fix_result, owner, repo, client):
         click.echo()
         if stale.is_merged:
             click.echo(
-                f"Branch '{stale.branch}' is fully merged into "
-                f"'{stale.default_branch}' and is no longer needed."
+                f"Branch '{stale.branch}' is fully merged into '{stale.default_branch}' and is no longer needed."
             )
             if click.confirm(f"Delete '{stale.branch}'?", default=False):
                 client.delete_branch(owner, repo, stale.branch)
@@ -147,8 +146,7 @@ def _handle_stale_branches(fix_result, owner, repo, client):
                 click.echo(f"  Leaving '{stale.branch}' in place.")
         else:
             click.echo(
-                f"WARNING: Branch '{stale.branch}' has "
-                f"{stale.ahead_by} commit(s) not in '{stale.default_branch}'."
+                f"WARNING: Branch '{stale.branch}' has {stale.ahead_by} commit(s) not in '{stale.default_branch}'."
             )
             click.echo("Review these commits before deleting:")
             click.echo(
@@ -166,17 +164,11 @@ def _warn_stale_branches(fix_result, owner, repo):
     """Print warnings about stale branches (non-interactive, for --all mode)."""
     for stale in fix_result.stale_branches:
         if stale.is_merged:
-            click.echo(
-                f"  ! Branch '{stale.branch}' is fully merged into "
-                f"'{stale.default_branch}' and can be deleted:"
-            )
-            click.echo(
-                f"    gh api -X DELETE repos/{owner}/{repo}/git/refs/heads/{stale.branch}"
-            )
+            click.echo(f"  ! Branch '{stale.branch}' is fully merged into '{stale.default_branch}' and can be deleted:")
+            click.echo(f"    gh api -X DELETE repos/{owner}/{repo}/git/refs/heads/{stale.branch}")
         else:
             click.echo(
-                f"  ! Branch '{stale.branch}' has {stale.ahead_by} unmerged "
-                f"commit(s). Review and delete manually."
+                f"  ! Branch '{stale.branch}' has {stale.ahead_by} unmerged commit(s). Review and delete manually."
             )
 
 
