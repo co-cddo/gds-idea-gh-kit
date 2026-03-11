@@ -72,9 +72,7 @@ def test_workflow_missing(httpx_mock: HTTPXMock, gh_client: GitHubClient):
         status_code=404,
     )
 
-    results = files.audit(
-        "co-cddo", "my-repo", [], ["lint.yml", "cdk-deploy-dev.yml"], gh_client
-    )
+    results = files.audit("co-cddo", "my-repo", [], ["lint.yml", "cdk-deploy-dev.yml"], gh_client)
     passed = [r for r in results if r.status == CheckStatus.PASSED]
     failed = [r for r in results if r.status == CheckStatus.FAILED]
     assert len(passed) == 1
@@ -109,7 +107,11 @@ def test_alternative_first_exists(httpx_mock: HTTPXMock, gh_client: GitHubClient
     )
 
     results = files.audit(
-        "co-cddo", "my-repo", [["README.md", "docs/README.md"]], [], gh_client,
+        "co-cddo",
+        "my-repo",
+        [["README.md", "docs/README.md"]],
+        [],
+        gh_client,
     )
     assert len(results) == 1
     assert results[0].status == CheckStatus.PASSED
@@ -128,7 +130,11 @@ def test_alternative_second_exists(httpx_mock: HTTPXMock, gh_client: GitHubClien
     )
 
     results = files.audit(
-        "co-cddo", "my-repo", [["README.md", "docs/README.md"]], [], gh_client,
+        "co-cddo",
+        "my-repo",
+        [["README.md", "docs/README.md"]],
+        [],
+        gh_client,
     )
     assert len(results) == 1
     assert results[0].status == CheckStatus.PASSED
@@ -147,7 +153,11 @@ def test_alternative_none_exist(httpx_mock: HTTPXMock, gh_client: GitHubClient):
     )
 
     results = files.audit(
-        "co-cddo", "my-repo", [["README.md", "docs/README.md"]], [], gh_client,
+        "co-cddo",
+        "my-repo",
+        [["README.md", "docs/README.md"]],
+        [],
+        gh_client,
     )
     assert len(results) == 1
     assert results[0].status == CheckStatus.FAILED

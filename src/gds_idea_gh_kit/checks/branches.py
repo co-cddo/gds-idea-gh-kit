@@ -19,9 +19,7 @@ def ruleset_name(branch: str) -> str:
     return f"{RULESET_PREFIX}: {branch}"
 
 
-def audit(
-    owner: str, repo: str, type_config: RepoTypeConfig, client: GitHubClient
-) -> list[CheckResult]:
+def audit(owner: str, repo: str, type_config: RepoTypeConfig, client: GitHubClient) -> list[CheckResult]:
     """Check default branch and all configured branch protection rulesets."""
     results = []
     repo_data = client.get_repo(owner, repo)
@@ -41,10 +39,7 @@ def audit(
             CheckResult(
                 name="branches.default",
                 status=CheckStatus.FAILED,
-                message=(
-                    f"Default branch: {actual_default} "
-                    f"(expected {type_config.default_branch})"
-                ),
+                message=(f"Default branch: {actual_default} (expected {type_config.default_branch})"),
                 fix_available=True,
             )
         )
@@ -68,9 +63,7 @@ def audit(
 
     # --- Rulesets ---
     for branch_name, expected_bp in type_config.branch_protection.items():
-        results.extend(
-            _audit_ruleset(owner, repo, branch_name, expected_bp, client)
-        )
+        results.extend(_audit_ruleset(owner, repo, branch_name, expected_bp, client))
 
     return results
 
@@ -114,10 +107,7 @@ def _audit_ruleset(
             CheckResult(
                 name=f"branches.ruleset.{branch}.deletion",
                 status=CheckStatus.FAILED,
-                message=(
-                    f"Branch '{branch}': prevent deletion: {has_deletion} "
-                    f"(expected {expected.prevent_deletion})"
-                ),
+                message=(f"Branch '{branch}': prevent deletion: {has_deletion} (expected {expected.prevent_deletion})"),
                 fix_available=True,
             )
         )
@@ -137,10 +127,7 @@ def _audit_ruleset(
             CheckResult(
                 name=f"branches.ruleset.{branch}.force_push",
                 status=CheckStatus.FAILED,
-                message=(
-                    f"Branch '{branch}': prevent force push: {has_nff} "
-                    f"(expected {expected.prevent_force_push})"
-                ),
+                message=(f"Branch '{branch}': prevent force push: {has_nff} (expected {expected.prevent_force_push})"),
                 fix_available=True,
             )
         )
@@ -161,8 +148,7 @@ def _audit_ruleset(
                 name=f"branches.ruleset.{branch}.linear_history",
                 status=CheckStatus.FAILED,
                 message=(
-                    f"Branch '{branch}': linear history: {has_linear} "
-                    f"(expected {expected.require_linear_history})"
+                    f"Branch '{branch}': linear history: {has_linear} (expected {expected.require_linear_history})"
                 ),
                 fix_available=True,
             )
@@ -238,9 +224,7 @@ def _audit_ruleset(
 
     # --- Bypass actors ---
     actual_bypass = ruleset.get("bypass_actors", [])
-    actual_bypass_team_ids = {
-        a["actor_id"] for a in actual_bypass if a.get("actor_type") == "Team"
-    }
+    actual_bypass_team_ids = {a["actor_id"] for a in actual_bypass if a.get("actor_type") == "Team"}
     if expected.bypass_teams:
         # We can't resolve slugs to IDs during audit without extra API calls,
         # so we check count and report slugs for readability
@@ -249,10 +233,7 @@ def _audit_ruleset(
                 CheckResult(
                     name=f"branches.ruleset.{branch}.bypass_teams",
                     status=CheckStatus.PASSED,
-                    message=(
-                        f"Branch '{branch}': bypass teams configured "
-                        f"({len(actual_bypass_team_ids)} team(s))"
-                    ),
+                    message=(f"Branch '{branch}': bypass teams configured ({len(actual_bypass_team_ids)} team(s))"),
                 )
             )
         else:
@@ -273,8 +254,7 @@ def _audit_ruleset(
                 name=f"branches.ruleset.{branch}.bypass_teams",
                 status=CheckStatus.WARNING,
                 message=(
-                    f"Branch '{branch}': {len(actual_bypass_team_ids)} bypass team(s) "
-                    f"configured but none expected"
+                    f"Branch '{branch}': {len(actual_bypass_team_ids)} bypass team(s) configured but none expected"
                 ),
             )
         )
@@ -381,11 +361,13 @@ def build_ruleset_payload(
     bypass_actors = []
     for team_slug in bp.bypass_teams:
         team_id = client.get_team_id(org, team_slug)
-        bypass_actors.append({
-            "actor_id": team_id,
-            "actor_type": "Team",
-            "bypass_mode": bp.bypass_mode,
-        })
+        bypass_actors.append(
+            {
+                "actor_id": team_id,
+                "actor_type": "Team",
+                "bypass_mode": bp.bypass_mode,
+            }
+        )
 
     return {
         "name": name,

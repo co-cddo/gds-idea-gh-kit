@@ -7,7 +7,6 @@ from enum import Enum
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-
 # --- Audit result models (plain pydantic, not settings) ---
 
 
@@ -181,8 +180,7 @@ class Config(BaseModel):
         for team, perm in v.items():
             if perm not in valid:
                 raise ValueError(
-                    f"Team '{team}' has invalid permission '{perm}'. "
-                    f"Must be one of: {', '.join(sorted(valid))}"
+                    f"Team '{team}' has invalid permission '{perm}'. Must be one of: {', '.join(sorted(valid))}"
                 )
         return v
 

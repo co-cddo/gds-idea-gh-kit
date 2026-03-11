@@ -37,15 +37,9 @@ def get_gh_token() -> str:
             raise AuthError("gh auth token returned empty output. Run 'gh auth login' first.")
         return token
     except FileNotFoundError:
-        raise AuthError(
-            "gh CLI not found. Install it: https://cli.github.com/\n"
-            "Then authenticate: gh auth login"
-        )
+        raise AuthError("gh CLI not found. Install it: https://cli.github.com/\nThen authenticate: gh auth login")
     except subprocess.CalledProcessError as e:
-        raise AuthError(
-            f"gh auth token failed: {e.stderr.strip()}\n"
-            "Run 'gh auth login' to authenticate."
-        )
+        raise AuthError(f"gh auth token failed: {e.stderr.strip()}\nRun 'gh auth login' to authenticate.")
 
 
 class GitHubClient:
@@ -92,33 +86,23 @@ class GitHubClient:
         try:
             response = self._client.get("/user")
         except (httpx.ConnectError, httpx.TimeoutException):
-            raise GitHubClientError(
-                "Cannot reach api.github.com. Check your network connection and VPN."
-            )
+            raise GitHubClientError("Cannot reach api.github.com. Check your network connection and VPN.")
 
         if response.status_code == 401:
-            raise AuthError(
-                "GitHub token is invalid or expired.\n"
-                "Run 'gh auth login' to re-authenticate."
-            )
+            raise AuthError("GitHub token is invalid or expired.\nRun 'gh auth login' to re-authenticate.")
         if response.status_code >= 400:
-            raise GitHubClientError(
-                f"Unexpected error checking GitHub connection: {response.status_code}"
-            )
+            raise GitHubClientError(f"Unexpected error checking GitHub connection: {response.status_code}")
 
         # Check org access
         if self.org:
             try:
                 org_response = self._client.get(f"/orgs/{self.org}")
             except (httpx.ConnectError, httpx.TimeoutException):
-                raise GitHubClientError(
-                    "Cannot reach api.github.com. Check your network connection and VPN."
-                )
+                raise GitHubClientError("Cannot reach api.github.com. Check your network connection and VPN.")
 
             if org_response.status_code in (404, 403):
                 raise GitHubClientError(
-                    f"Cannot access org '{self.org}'. Check you have access "
-                    f"and the org name is correct in your config."
+                    f"Cannot access org '{self.org}'. Check you have access and the org name is correct in your config."
                 )
 
         self._verified_at = time.monotonic()
@@ -129,14 +113,10 @@ class GitHubClient:
         if response.status_code == 404:
             raise GitHubClientError(f"Not found: {path}")
         if response.status_code == 403:
-            raise GitHubClientError(
-                f"Permission denied: {path}. Check your token has the required scopes."
-            )
+            raise GitHubClientError(f"Permission denied: {path}. Check your token has the required scopes.")
         if response.status_code >= 400:
             body = response.text
-            raise GitHubClientError(
-                f"GitHub API error {response.status_code} on {method} {path}: {body}"
-            )
+            raise GitHubClientError(f"GitHub API error {response.status_code} on {method} {path}: {body}")
         return response
 
     # --- Repository ---
@@ -159,9 +139,7 @@ class GitHubClient:
         repos = []
         page = 1
         while True:
-            response = self._request(
-                "GET", f"/orgs/{org}/repos", params={"per_page": per_page, "page": page}
-            )
+            response = self._request("GET", f"/orgs/{org}/repos", params={"per_page": per_page, "page": page})
             batch = response.json()
             if not batch:
                 break
@@ -208,9 +186,7 @@ class GitHubClient:
         except GitHubClientError:
             return None
 
-    def set_team_repo_permission(
-        self, org: str, team_slug: str, owner: str, repo: str, permission: str
-    ) -> None:
+    def set_team_repo_permission(self, org: str, team_slug: str, owner: str, repo: str, permission: str) -> None:
         """Set a team's permission on a repo."""
         self._request(
             "PUT",
@@ -227,9 +203,7 @@ class GitHubClient:
     def get_branch_protection(self, owner: str, repo: str, branch: str) -> dict | None:
         """Get classic branch protection rules. Returns None if not protected."""
         try:
-            return self._request(
-                "GET", f"/repos/{owner}/{repo}/branches/{branch}/protection"
-            ).json()
+            return self._request("GET", f"/repos/{owner}/{repo}/branches/{branch}/protection").json()
         except GitHubClientError:
             return None
 
@@ -253,9 +227,7 @@ class GitHubClient:
 
     def update_ruleset(self, owner: str, repo: str, ruleset_id: int, payload: dict) -> dict:
         """Update an existing ruleset."""
-        return self._request(
-            "PUT", f"/repos/{owner}/{repo}/rulesets/{ruleset_id}", json=payload
-        ).json()
+        return self._request("PUT", f"/repos/{owner}/{repo}/rulesets/{ruleset_id}", json=payload).json()
 
     def delete_ruleset(self, owner: str, repo: str, ruleset_id: int) -> None:
         """Delete a ruleset."""
@@ -302,9 +274,7 @@ class GitHubClient:
 
     def get_automated_security_fixes_enabled(self, owner: str, repo: str) -> bool:
         """Check if automated security fixes are enabled."""
-        response = self._client.get(
-            f"/repos/{owner}/{repo}/automated-security-fixes"
-        )
+        response = self._client.get(f"/repos/{owner}/{repo}/automated-security-fixes")
         if response.status_code == 200:
             return response.json().get("enabled", False)
         return False
@@ -345,9 +315,7 @@ class GitHubClient:
         as *from_branch*.
         """
         # Get the SHA of the source branch
-        ref_data = self._request(
-            "GET", f"/repos/{owner}/{repo}/git/ref/heads/{from_branch}"
-        ).json()
+        ref_data = self._request("GET", f"/repos/{owner}/{repo}/git/ref/heads/{from_branch}").json()
         sha = ref_data["object"]["sha"]
 
         # Create the new branch ref
@@ -364,9 +332,7 @@ class GitHubClient:
         ``behind_by`` counts.  ``ahead_by`` is the number of commits
         in *head* that are not in *base*.
         """
-        return self._request(
-            "GET", f"/repos/{owner}/{repo}/compare/{base}...{head}"
-        ).json()
+        return self._request("GET", f"/repos/{owner}/{repo}/compare/{base}...{head}").json()
 
     def delete_branch(self, owner: str, repo: str, branch: str) -> None:
         """Delete a branch via the Git Refs API."""

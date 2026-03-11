@@ -1,6 +1,5 @@
 """Tests for the settings check."""
 
-import httpx
 from pytest_httpx import HTTPXMock
 
 from gds_idea_gh_kit.checks import settings

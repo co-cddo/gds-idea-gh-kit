@@ -3,8 +3,13 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import click
+
+if TYPE_CHECKING:
+    from gds_idea_gh_kit.github_client import GitHubClient
+    from gds_idea_gh_kit.models import Config
 
 from gds_idea_gh_kit import __version__
 
@@ -70,10 +75,7 @@ def audit(ctx: click.Context, repo_type: str | None, audit_all: bool, apply_fix:
         raise click.ClickException(str(e))
 
     if repo_type and repo_type not in config.repo_types:
-        raise click.ClickException(
-            f"Unknown repo type '{repo_type}'. "
-            f"Available: {', '.join(config.repo_types.keys())}"
-        )
+        raise click.ClickException(f"Unknown repo type '{repo_type}'. Available: {', '.join(config.repo_types.keys())}")
 
     with GitHubClient(org=config.org) as client:
         try:
@@ -135,8 +137,7 @@ def _handle_stale_branches(fix_result, owner, repo, client):
         click.echo()
         if stale.is_merged:
             click.echo(
-                f"Branch '{stale.branch}' is fully merged into "
-                f"'{stale.default_branch}' and is no longer needed."
+                f"Branch '{stale.branch}' is fully merged into '{stale.default_branch}' and is no longer needed."
             )
             if click.confirm(f"Delete '{stale.branch}'?", default=False):
                 client.delete_branch(owner, repo, stale.branch)
@@ -145,8 +146,7 @@ def _handle_stale_branches(fix_result, owner, repo, client):
                 click.echo(f"  Leaving '{stale.branch}' in place.")
         else:
             click.echo(
-                f"WARNING: Branch '{stale.branch}' has "
-                f"{stale.ahead_by} commit(s) not in '{stale.default_branch}'."
+                f"WARNING: Branch '{stale.branch}' has {stale.ahead_by} commit(s) not in '{stale.default_branch}'."
             )
             click.echo("Review these commits before deleting:")
             click.echo(
@@ -164,23 +164,20 @@ def _warn_stale_branches(fix_result, owner, repo):
     """Print warnings about stale branches (non-interactive, for --all mode)."""
     for stale in fix_result.stale_branches:
         if stale.is_merged:
-            click.echo(
-                f"  ! Branch '{stale.branch}' is fully merged into "
-                f"'{stale.default_branch}' and can be deleted:"
-            )
-            click.echo(
-                f"    gh api -X DELETE repos/{owner}/{repo}/git/refs/heads/{stale.branch}"
-            )
+            click.echo(f"  ! Branch '{stale.branch}' is fully merged into '{stale.default_branch}' and can be deleted:")
+            click.echo(f"    gh api -X DELETE repos/{owner}/{repo}/git/refs/heads/{stale.branch}")
         else:
             click.echo(
-                f"  ! Branch '{stale.branch}' has {stale.ahead_by} unmerged "
-                f"commit(s). Review and delete manually."
+                f"  ! Branch '{stale.branch}' has {stale.ahead_by} unmerged commit(s). Review and delete manually."
             )
 
 
 def _audit_all_repos(
-    config: "Config", client: "GitHubClient", repo_type_filter: str | None,
-    apply_fix: bool = False, verbose: bool = False,
+    config: Config,
+    client: GitHubClient,
+    repo_type_filter: str | None,
+    apply_fix: bool = False,
+    verbose: bool = False,
 ):
     """Audit all matching repos in the org."""
     from gds_idea_gh_kit.audit import audit_repo, detect_repo_type, fix_repo, render_report
@@ -208,7 +205,10 @@ def _audit_all_repos(
 
         try:
             detected_type = repo_type_filter or detect_repo_type(
-                config.org, repo_name, config, client,
+                config.org,
+                repo_name,
+                config,
+                client,
             )
         except GitHubClientError as e:
             click.echo(f"Skipping {repo_name}: {e}")
@@ -291,10 +291,7 @@ def init(ctx: click.Context, repo_type: str):
         raise click.ClickException(str(e))
 
     if repo_type not in config.repo_types:
-        raise click.ClickException(
-            f"Unknown repo type '{repo_type}'. "
-            f"Available: {', '.join(config.repo_types.keys())}"
-        )
+        raise click.ClickException(f"Unknown repo type '{repo_type}'. Available: {', '.join(config.repo_types.keys())}")
 
     repo_name = get_repo_name_from_directory()
 
@@ -314,7 +311,7 @@ def init(ctx: click.Context, repo_type: str):
         for step in steps:
             click.echo(f"  \u2713 {step}")
 
-        click.echo(f"\nDone! Verify with: idea-gh audit --verbose")
+        click.echo("\nDone! Verify with: idea-gh audit --verbose")
 
 
 @cli.command("rename")
@@ -349,9 +346,7 @@ def rename(ctx: click.Context, new_name: str, yes: bool):
         click.echo("  - Cross-repo issue/PR references will not update")
         click.echo("  - GitHub redirects the old URL, but this is not permanent")
         click.echo()
-        click.confirm(
-            f"Rename '{owner}/{repo}' to '{owner}/{new_name}'?", abort=True
-        )
+        click.confirm(f"Rename '{owner}/{repo}' to '{owner}/{new_name}'?", abort=True)
 
     with GitHubClient(org=config.org) as client:
         try:
@@ -385,9 +380,7 @@ def remove_collaborators(ctx: click.Context, usernames: tuple[str, ...], remove_
     from gds_idea_gh_kit.repo_info import RepoInfoError, get_repo_from_remote
 
     if not usernames and not remove_all:
-        raise click.ClickException(
-            "Provide usernames to remove, or use --all to remove all direct collaborators."
-        )
+        raise click.ClickException("Provide usernames to remove, or use --all to remove all direct collaborators.")
 
     try:
         config = load_config(ctx.obj["config_path"])
@@ -418,9 +411,7 @@ def remove_collaborators(ctx: click.Context, usernames: tuple[str, ...], remove_
             # Validate requested usernames exist as direct collaborators
             unknown = set(usernames) - collab_logins
             if unknown:
-                raise click.ClickException(
-                    f"Not direct collaborators: {', '.join(sorted(unknown))}"
-                )
+                raise click.ClickException(f"Not direct collaborators: {', '.join(sorted(unknown))}")
             to_remove = [c for c in collabs if c["login"] in usernames]
 
         click.echo(f"Will remove {len(to_remove)} direct collaborator(s) from {owner}/{repo}:")
@@ -431,8 +422,7 @@ def remove_collaborators(ctx: click.Context, usernames: tuple[str, ...], remove_
 
         if not yes:
             click.confirm(
-                "Proceed? They will lose access unless they are also "
-                "members of a team with repo access.",
+                "Proceed? They will lose access unless they are also members of a team with repo access.",
                 abort=True,
             )
 

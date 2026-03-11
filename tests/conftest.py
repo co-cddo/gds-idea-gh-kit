@@ -1,7 +1,6 @@
 """Shared fixtures for tests."""
 
 import pytest
-import httpx
 from pytest_httpx import HTTPXMock
 
 from gds_idea_gh_kit.github_client import GitHubClient
