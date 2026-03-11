@@ -316,15 +316,43 @@ class GitHubClient:
     # --- Default branch ---
 
     def rename_default_branch(self, owner: str, repo: str, new_name: str) -> dict:
-        """Rename the default branch of a repo."""
-        # First get current default branch
+        """Rename the default branch of a repo.
+
+        If the target branch already exists (e.g. the repo has both
+        ``main`` and ``dev``), we simply set the default branch rather
+        than trying to rename.
+        """
         repo_data = self.get_repo(owner, repo)
         current = repo_data["default_branch"]
         if current == new_name:
             return repo_data
-        # Rename the branch
+
+        # Try renaming first — this works when the target doesn't exist yet
+        try:
+            return self._request(
+                "POST",
+                f"/repos/{owner}/{repo}/branches/{current}/rename",
+                json={"new_name": new_name},
+            ).json()
+        except GitHubClientError:
+            # Target branch likely already exists — just change the default
+            return self.update_repo(owner, repo, default_branch=new_name)
+
+    def create_branch(self, owner: str, repo: str, branch: str, from_branch: str) -> dict:
+        """Create a new branch from an existing branch.
+
+        Uses the Git Refs API to create a ref pointing at the same commit
+        as *from_branch*.
+        """
+        # Get the SHA of the source branch
+        ref_data = self._request(
+            "GET", f"/repos/{owner}/{repo}/git/ref/heads/{from_branch}"
+        ).json()
+        sha = ref_data["object"]["sha"]
+
+        # Create the new branch ref
         return self._request(
             "POST",
-            f"/repos/{owner}/{repo}/branches/{current}/rename",
-            json={"new_name": new_name},
+            f"/repos/{owner}/{repo}/git/refs",
+            json={"ref": f"refs/heads/{branch}", "sha": sha},
         ).json()

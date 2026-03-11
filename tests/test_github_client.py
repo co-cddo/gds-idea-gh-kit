@@ -115,3 +115,65 @@ def test_verify_connection_ttl_cache(httpx_mock: HTTPXMock):
     client.verify_connection()  # should use cache, no extra requests
 
     # pytest-httpx would raise if more requests were made than registered
+
+
+# --- rename_default_branch ---
+
+
+BASE = "https://api.github.com"
+
+
+def test_rename_default_branch_renames(httpx_mock: HTTPXMock):
+    """When target branch doesn't exist, rename succeeds normally."""
+    httpx_mock.add_response(
+        url=f"{BASE}/repos/co-cddo/my-repo",
+        json={"default_branch": "main"},
+    )
+    httpx_mock.add_response(
+        url=f"{BASE}/repos/co-cddo/my-repo/branches/main/rename",
+        method="POST",
+        json={"name": "dev"},
+    )
+
+    client = GitHubClient(token="fake-token", org="co-cddo")
+    result = client.rename_default_branch("co-cddo", "my-repo", "dev")
+    assert result["name"] == "dev"
+
+
+def test_rename_default_branch_falls_back_when_target_exists(httpx_mock: HTTPXMock):
+    """When target branch already exists, fall back to setting default via PATCH."""
+    httpx_mock.add_response(
+        url=f"{BASE}/repos/co-cddo/my-repo",
+        method="GET",
+        json={"default_branch": "main"},
+    )
+    # Rename fails — target branch already exists
+    httpx_mock.add_response(
+        url=f"{BASE}/repos/co-cddo/my-repo/branches/main/rename",
+        method="POST",
+        status_code=422,
+        json={"message": "Validation Failed", "errors": ["New branch already exists"]},
+    )
+    # Falls back to PATCH to set default branch
+    httpx_mock.add_response(
+        url=f"{BASE}/repos/co-cddo/my-repo",
+        method="PATCH",
+        json={"default_branch": "dev"},
+    )
+
+    client = GitHubClient(token="fake-token", org="co-cddo")
+    result = client.rename_default_branch("co-cddo", "my-repo", "dev")
+    assert result["default_branch"] == "dev"
+
+
+def test_rename_default_branch_noop_when_already_correct(httpx_mock: HTTPXMock):
+    """When default branch is already correct, no rename needed."""
+    httpx_mock.add_response(
+        url=f"{BASE}/repos/co-cddo/my-repo",
+        method="GET",
+        json={"default_branch": "dev"},
+    )
+
+    client = GitHubClient(token="fake-token", org="co-cddo")
+    result = client.rename_default_branch("co-cddo", "my-repo", "dev")
+    assert result["default_branch"] == "dev"

@@ -210,6 +210,62 @@ def _audit_all_repos(
     raise SystemExit(1 if total_failed > 0 else 0)
 
 
+@cli.command("init")
+@click.option(
+    "--type",
+    "repo_type",
+    required=True,
+    help="Repo type (e.g. cdk-app). Determines naming, branches, and rulesets.",
+)
+@click.pass_context
+def init(ctx: click.Context, repo_type: str):
+    """Create a GitHub repo and configure it to pass audit.
+
+    Run from inside a local repo directory (after 'idea-app init').
+    Creates the GitHub repo, pushes, and applies all standard settings,
+    teams, branch protection, and security configuration.
+
+    \b
+    Example:
+      cd gds-idea-app-my-dashboard
+      idea-gh init --type cdk-app
+    """
+    from gds_idea_gh_kit.config import ConfigError, load_config
+    from gds_idea_gh_kit.github_client import AuthError, GitHubClient, GitHubClientError
+    from gds_idea_gh_kit.init import InitError, get_repo_name_from_directory, init_repo
+
+    try:
+        config = load_config(ctx.obj["config_path"])
+    except ConfigError as e:
+        raise click.ClickException(str(e))
+
+    if repo_type not in config.repo_types:
+        raise click.ClickException(
+            f"Unknown repo type '{repo_type}'. "
+            f"Available: {', '.join(config.repo_types.keys())}"
+        )
+
+    repo_name = get_repo_name_from_directory()
+
+    with GitHubClient(org=config.org) as client:
+        try:
+            client.verify_connection()
+        except (GitHubClientError, AuthError) as e:
+            raise click.ClickException(str(e))
+
+        click.echo(f"Initialising {repo_name} as {repo_type}...\n")
+
+        try:
+            steps = init_repo(repo_name, config, repo_type, client)
+        except InitError as e:
+            raise click.ClickException(str(e))
+
+        for step in steps:
+            click.echo(f"  \u2713 {step}")
+
+        click.echo(f"\nDone! Verify with: idea-gh audit --verbose")
+
+
 @cli.command("rename")
 @click.argument("new_name")
 @click.option("--yes", is_flag=True, help="Skip confirmation prompt.")

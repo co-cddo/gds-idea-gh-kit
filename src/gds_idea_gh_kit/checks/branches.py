@@ -13,7 +13,7 @@ from gds_idea_gh_kit.models import (
 RULESET_PREFIX = "idea-gh"
 
 
-def _ruleset_name(branch: str) -> str:
+def ruleset_name(branch: str) -> str:
     """Name for a managed ruleset."""
     return f"{RULESET_PREFIX}: {branch}"
 
@@ -82,7 +82,7 @@ def _audit_ruleset(
     client: GitHubClient,
 ) -> list[CheckResult]:
     """Audit the ruleset for a single branch."""
-    name = _ruleset_name(branch)
+    name = ruleset_name(branch)
     ruleset = client.find_ruleset_by_name(owner, repo, name)
 
     if ruleset is None:
@@ -308,8 +308,8 @@ def fix(
 
     # Create or update rulesets
     for branch_name, expected_bp in type_config.branch_protection.items():
-        name = _ruleset_name(branch_name)
-        payload = _build_ruleset_payload(name, branch_name, expected_bp, org, client)
+        name = ruleset_name(branch_name)
+        payload = build_ruleset_payload(name, branch_name, expected_bp, org, client)
 
         existing = client.find_ruleset_by_name(owner, repo, name)
         if existing:
@@ -322,7 +322,7 @@ def fix(
     return changes
 
 
-def _build_ruleset_payload(
+def build_ruleset_payload(
     name: str,
     branch: str,
     bp: BranchProtectionConfig,

@@ -35,7 +35,7 @@ repo_types:
     detection_files: [cdk.json]
     default_branch: dev
     required_workflows:
-      [ci_cd_cdk_app.yml]
+      [ci_cd_cdk_app.yml, ci_pr_cdk_app.yml]
     branch_protection:
       dev:
         require_pr: true
