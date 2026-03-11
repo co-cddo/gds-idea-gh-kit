@@ -1,6 +1,5 @@
 """Tests for GitHubClient.verify_connection()."""
 
-
 import httpx
 import pytest
 from pytest_httpx import HTTPXMock

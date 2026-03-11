@@ -211,6 +211,7 @@ def test_init_repo_rejects_bad_name(mock_git, httpx_mock: HTTPXMock, gh_client: 
 @patch("gds_idea_gh_kit.init._run_git")
 def test_init_repo_rejects_existing_remote(mock_git, httpx_mock: HTTPXMock, gh_client: GitHubClient):
     """Init errors if the repo already has a remote."""
+
     def fake_git(*args):
         key = tuple(args)
         if key == ("rev-parse", "--is-inside-work-tree"):
@@ -231,6 +232,7 @@ def test_init_repo_rejects_existing_remote(mock_git, httpx_mock: HTTPXMock, gh_c
 @patch("gds_idea_gh_kit.init._run_git")
 def test_init_repo_rejects_no_git_repo(mock_git, httpx_mock: HTTPXMock, gh_client: GitHubClient):
     """Init errors if not inside a git repo."""
+
     def fake_git(*args):
         raise InitError("git rev-parse failed: not a git repository")
 
@@ -244,6 +246,7 @@ def test_init_repo_rejects_no_git_repo(mock_git, httpx_mock: HTTPXMock, gh_clien
 @patch("gds_idea_gh_kit.init._run_git")
 def test_init_repo_rejects_no_commits(mock_git, httpx_mock: HTTPXMock, gh_client: GitHubClient):
     """Init errors if the repo has no commits."""
+
     def fake_git(*args):
         key = tuple(args)
         if key == ("rev-parse", "--is-inside-work-tree"):

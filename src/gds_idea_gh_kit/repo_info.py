@@ -26,10 +26,7 @@ def get_repo_from_remote() -> tuple[str, str]:
     except FileNotFoundError:
         raise RepoInfoError("git is not installed or not on PATH.")
     except subprocess.CalledProcessError:
-        raise RepoInfoError(
-            "Could not read git remote 'origin'. "
-            "Are you inside a git repo with a remote configured?"
-        )
+        raise RepoInfoError("Could not read git remote 'origin'. Are you inside a git repo with a remote configured?")
 
     url = result.stdout.strip()
     return _parse_github_remote(url)

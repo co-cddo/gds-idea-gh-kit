@@ -6,9 +6,7 @@ from gds_idea_gh_kit.github_client import GitHubClient
 from gds_idea_gh_kit.models import CheckResult, CheckStatus, SecurityConfig
 
 
-def audit(
-    owner: str, repo: str, expected: SecurityConfig, client: GitHubClient
-) -> list[CheckResult]:
+def audit(owner: str, repo: str, expected: SecurityConfig, client: GitHubClient) -> list[CheckResult]:
     """Check vulnerability alerts and automated security fixes."""
     results = []
 
@@ -27,10 +25,7 @@ def audit(
             CheckResult(
                 name="security.vulnerability_alerts",
                 status=CheckStatus.FAILED,
-                message=(
-                    f"Vulnerability alerts: {vuln_enabled} "
-                    f"(expected {expected.vulnerability_alerts})"
-                ),
+                message=(f"Vulnerability alerts: {vuln_enabled} (expected {expected.vulnerability_alerts})"),
                 fix_available=expected.vulnerability_alerts,  # can only enable, not disable
             )
         )
@@ -50,10 +45,7 @@ def audit(
             CheckResult(
                 name="security.automated_fixes",
                 status=CheckStatus.FAILED,
-                message=(
-                    f"Automated security fixes: {auto_enabled} "
-                    f"(expected {expected.automated_security_fixes})"
-                ),
+                message=(f"Automated security fixes: {auto_enabled} (expected {expected.automated_security_fixes})"),
                 fix_available=expected.automated_security_fixes,
             )
         )
@@ -61,9 +53,7 @@ def audit(
     return results
 
 
-def fix(
-    owner: str, repo: str, expected: SecurityConfig, client: GitHubClient
-) -> list[str]:
+def fix(owner: str, repo: str, expected: SecurityConfig, client: GitHubClient) -> list[str]:
     """Enable security features as needed. Returns list of changes made."""
     changes = []
 

@@ -17,9 +17,7 @@ _PERM_TO_API = {
 }
 
 
-def audit(
-    owner: str, repo: str, expected_teams: dict[str, str], client: GitHubClient
-) -> list[CheckResult]:
+def audit(owner: str, repo: str, expected_teams: dict[str, str], client: GitHubClient) -> list[CheckResult]:
     """Check each expected team has the right permission, and flag unexpected teams."""
     results = []
     org = client.org or owner
@@ -50,9 +48,7 @@ def audit(
                 CheckResult(
                     name=f"teams.{team_slug}",
                     status=CheckStatus.FAILED,
-                    message=(
-                        f"Team '{team_slug}': {actual_perm} (expected {expected_perm})"
-                    ),
+                    message=(f"Team '{team_slug}': {actual_perm} (expected {expected_perm})"),
                     fix_available=True,
                 )
             )
@@ -140,9 +136,7 @@ def audit(
     return results
 
 
-def fix(
-    owner: str, repo: str, expected_teams: dict[str, str], client: GitHubClient
-) -> list[str]:
+def fix(owner: str, repo: str, expected_teams: dict[str, str], client: GitHubClient) -> list[str]:
     """Grant/update team permissions to match config. Returns list of changes made."""
     org = client.org or owner
     changes = []

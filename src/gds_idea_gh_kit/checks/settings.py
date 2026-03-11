@@ -17,9 +17,7 @@ _SETTINGS_MAP = {
 }
 
 
-def audit(
-    owner: str, repo: str, expected: RepoSettings, client: GitHubClient
-) -> list[CheckResult]:
+def audit(owner: str, repo: str, expected: RepoSettings, client: GitHubClient) -> list[CheckResult]:
     """Compare actual repo settings against expected."""
     repo_data = client.get_repo(owner, repo)
     results = []
@@ -49,9 +47,7 @@ def audit(
     return results
 
 
-def fix(
-    owner: str, repo: str, expected: RepoSettings, client: GitHubClient
-) -> list[str]:
+def fix(owner: str, repo: str, expected: RepoSettings, client: GitHubClient) -> list[str]:
     """Apply repo settings to match expected config. Returns list of changes made."""
     repo_data = client.get_repo(owner, repo)
     updates = {}

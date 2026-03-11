@@ -59,9 +59,7 @@ def test_default_branch_correct(httpx_mock: HTTPXMock, gh_client: GitHubClient):
         url="https://api.github.com/repos/co-cddo/my-repo",
         json={"default_branch": "dev"},
     )
-    type_config = RepoTypeConfig(
-        naming_pattern="gds-idea-app-{name}", default_branch="dev"
-    )
+    type_config = RepoTypeConfig(naming_pattern="gds-idea-app-{name}", default_branch="dev")
     results = branches.audit("co-cddo", "my-repo", type_config, gh_client)
     default_result = [r for r in results if r.name == "branches.default"][0]
     assert default_result.status == CheckStatus.PASSED
@@ -72,9 +70,7 @@ def test_default_branch_wrong(httpx_mock: HTTPXMock, gh_client: GitHubClient):
         url="https://api.github.com/repos/co-cddo/my-repo",
         json={"default_branch": "main"},
     )
-    type_config = RepoTypeConfig(
-        naming_pattern="gds-idea-app-{name}", default_branch="dev"
-    )
+    type_config = RepoTypeConfig(naming_pattern="gds-idea-app-{name}", default_branch="dev")
     results = branches.audit("co-cddo", "my-repo", type_config, gh_client)
     default_result = [r for r in results if r.name == "branches.default"][0]
     assert default_result.status == CheckStatus.FAILED

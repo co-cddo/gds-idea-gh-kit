@@ -53,24 +53,19 @@ def _check_preconditions(repo_name: str, config: Config, repo_type: str) -> None
     try:
         _run_git("rev-parse", "--is-inside-work-tree")
     except InitError:
-        raise InitError(
-            "Not inside a git repo. Run 'idea-app init' first to scaffold the project."
-        )
+        raise InitError("Not inside a git repo. Run 'idea-app init' first to scaffold the project.")
 
     # Must have at least one commit
     try:
         _run_git("rev-parse", "HEAD")
     except InitError:
-        raise InitError(
-            "Git repo has no commits. Run 'idea-app init' first to scaffold the project."
-        )
+        raise InitError("Git repo has no commits. Run 'idea-app init' first to scaffold the project.")
 
     # Must not already have a remote
     try:
         _run_git("remote", "get-url", "origin")
         raise InitError(
-            "This repo already has a remote 'origin'. "
-            "Use 'idea-gh audit --fix' to configure an existing repo."
+            "This repo already has a remote 'origin'. Use 'idea-gh audit --fix' to configure an existing repo."
         )
     except InitError as e:
         if "already has a remote" in str(e):

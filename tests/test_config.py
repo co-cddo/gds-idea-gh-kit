@@ -134,12 +134,8 @@ def test_has_known_prefix():
         org="co-cddo",
         repo_prefixes=["gds-idea-"],
         repo_types={
-            "cdk-app": RepoTypeConfig(
-                naming_pattern="gds-idea-app-{name}", default_branch="dev"
-            ),
-            "python-package": RepoTypeConfig(
-                naming_pattern="gds-idea-{name}", default_branch="main"
-            ),
+            "cdk-app": RepoTypeConfig(naming_pattern="gds-idea-app-{name}", default_branch="dev"),
+            "python-package": RepoTypeConfig(naming_pattern="gds-idea-{name}", default_branch="main"),
         },
     )
     assert config.has_known_prefix("gds-idea-app-foo") is True

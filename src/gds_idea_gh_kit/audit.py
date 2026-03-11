@@ -80,29 +80,19 @@ def audit_repo(
     report.results.extend(naming.audit(repo, type_config))
 
     # 2. Settings
-    report.results.extend(
-        settings.audit(owner, repo, config.repo_settings, client)
-    )
+    report.results.extend(settings.audit(owner, repo, config.repo_settings, client))
 
     # 3. Teams
-    report.results.extend(
-        teams.audit(owner, repo, config.teams, client)
-    )
+    report.results.extend(teams.audit(owner, repo, config.teams, client))
 
     # 4. Branches (default branch + rulesets)
-    report.results.extend(
-        branches.audit(owner, repo, type_config, client)
-    )
+    report.results.extend(branches.audit(owner, repo, type_config, client))
 
     # 5. Files + workflows
-    report.results.extend(
-        files.audit(owner, repo, config.required_files, type_config.required_workflows, client)
-    )
+    report.results.extend(files.audit(owner, repo, config.required_files, type_config.required_workflows, client))
 
     # 6. Security
-    report.results.extend(
-        security.audit(owner, repo, config.security, client)
-    )
+    report.results.extend(security.audit(owner, repo, config.security, client))
 
     return report
 
