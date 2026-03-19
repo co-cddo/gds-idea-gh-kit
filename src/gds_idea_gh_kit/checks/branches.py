@@ -222,6 +222,31 @@ def _audit_ruleset(
                     )
                 )
 
+            # Allowed merge methods
+            if expected.allowed_merge_methods:
+                actual_methods = sorted(params.get("allowed_merge_methods", []))
+                expected_methods = sorted(expected.allowed_merge_methods)
+                if actual_methods == expected_methods:
+                    results.append(
+                        CheckResult(
+                            name=f"branches.ruleset.{branch}.merge_methods",
+                            status=CheckStatus.PASSED,
+                            message=f"Branch '{branch}': allowed merge methods: {actual_methods}",
+                        )
+                    )
+                else:
+                    results.append(
+                        CheckResult(
+                            name=f"branches.ruleset.{branch}.merge_methods",
+                            status=CheckStatus.FAILED,
+                            message=(
+                                f"Branch '{branch}': allowed merge methods: {actual_methods} "
+                                f"(expected {expected_methods})"
+                            ),
+                            fix_available=True,
+                        )
+                    )
+
     # --- Bypass actors ---
     actual_bypass = ruleset.get("bypass_actors", [])
     actual_bypass_team_ids = {a["actor_id"] for a in actual_bypass if a.get("actor_type") == "Team"}
@@ -355,6 +380,8 @@ def build_ruleset_payload(
             "require_last_push_approval": False,
             "required_review_thread_resolution": False,
         }
+        if bp.allowed_merge_methods:
+            pr_params["allowed_merge_methods"] = bp.allowed_merge_methods
         rules.append({"type": "pull_request", "parameters": pr_params})
 
     # Bypass actors

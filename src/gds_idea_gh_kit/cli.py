@@ -68,6 +68,10 @@ def audit(ctx: click.Context, repo_type: str | None, audit_all: bool, apply_fix:
     from gds_idea_gh_kit.config import ConfigError, load_config
     from gds_idea_gh_kit.github_client import AuthError, GitHubClient, GitHubClientError
     from gds_idea_gh_kit.repo_info import RepoInfoError, get_repo_from_remote
+    from gds_idea_gh_kit.version import check_tool_is_current
+
+    # -- Check tool is current --
+    check_tool_is_current()
 
     try:
         config = load_config(ctx.obj["config_path"])
@@ -284,6 +288,10 @@ def init(ctx: click.Context, repo_type: str):
     from gds_idea_gh_kit.config import ConfigError, load_config
     from gds_idea_gh_kit.github_client import AuthError, GitHubClient, GitHubClientError
     from gds_idea_gh_kit.init import InitError, get_repo_name_from_directory, init_repo
+    from gds_idea_gh_kit.version import check_tool_is_current
+
+    # -- Check tool is current --
+    check_tool_is_current()
 
     try:
         config = load_config(ctx.obj["config_path"])

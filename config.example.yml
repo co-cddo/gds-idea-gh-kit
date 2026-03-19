@@ -13,7 +13,7 @@ teams:
 repo_settings:
   delete_branch_on_merge: true
   allow_squash_merge: true
-  allow_merge_commit: false
+  allow_merge_commit: true
   allow_rebase_merge: false
   has_issues: true
   has_wiki: false
@@ -46,14 +46,17 @@ repo_types:
         prevent_force_push: true
         bypass_teams: [gds-idea-super-admin]
         bypass_mode: pull_request
+        allowed_merge_methods: [squash]
       prod:
         require_pr: true
         required_approvals: 1
+        dismiss_stale_reviews: true
         required_review_teams: [gds-idea-senior-ds]
         prevent_deletion: true
         prevent_force_push: true
         bypass_teams: []
         bypass_mode: pull_request
+        allowed_merge_methods: [merge]
 
   python-package:
     naming_pattern: "gds-idea-{name}"
@@ -71,3 +74,4 @@ repo_types:
         prevent_force_push: true
         bypass_teams: [gds-idea-super-admin]
         bypass_mode: pull_request
+        allowed_merge_methods: [squash]
