@@ -101,12 +101,24 @@ class BranchProtectionConfig(BaseModel):
     """Teams that can bypass rules on this branch (by slug)."""
     bypass_mode: str = "pull_request"
     """When bypass teams can bypass: 'always' or 'pull_request'."""
+    allowed_merge_methods: list[str] = Field(default_factory=list)
+    """Merge methods allowed for PRs targeting this branch (e.g. ['squash', 'merge']).
+    Empty list means no restriction (all repo-level methods allowed)."""
 
     @field_validator("bypass_mode")
     @classmethod
     def bypass_mode_must_be_valid(cls, v: str) -> str:
         if v not in ("always", "pull_request"):
             raise ValueError(f"bypass_mode must be 'always' or 'pull_request', got '{v}'")
+        return v
+
+    @field_validator("allowed_merge_methods")
+    @classmethod
+    def merge_methods_must_be_valid(cls, v: list[str]) -> list[str]:
+        valid = {"merge", "squash", "rebase"}
+        for method in v:
+            if method not in valid:
+                raise ValueError(f"Invalid merge method '{method}'. Must be one of: {', '.join(sorted(valid))}")
         return v
 
 
