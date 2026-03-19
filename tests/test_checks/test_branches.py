@@ -526,3 +526,159 @@ def test_fix_no_stale_when_default_already_correct(httpx_mock: HTTPXMock, gh_cli
     changes, stale_branches = branches.fix("co-cddo", "my-repo", type_config, gh_client)
 
     assert len(stale_branches) == 0
+
+
+# --- Allowed merge methods ---
+
+
+def _full_rules_with_merge_methods(
+    approvals=1,
+    dismiss_stale=True,
+    allowed_merge_methods=None,
+):
+    """Build rules including allowed_merge_methods in PR params."""
+    pr_params = {
+        "required_approving_review_count": approvals,
+        "dismiss_stale_reviews_on_push": dismiss_stale,
+    }
+    if allowed_merge_methods is not None:
+        pr_params["allowed_merge_methods"] = allowed_merge_methods
+    return [
+        {"type": "deletion"},
+        {"type": "non_fast_forward"},
+        {"type": "required_linear_history"},
+        {"type": "pull_request", "parameters": pr_params},
+    ]
+
+
+def test_allowed_merge_methods_pass(httpx_mock: HTTPXMock, gh_client: GitHubClient):
+    """Passes when actual merge methods match expected."""
+    httpx_mock.add_response(
+        url="https://api.github.com/repos/co-cddo/my-repo",
+        json={"default_branch": "dev"},
+    )
+    httpx_mock.add_response(
+        url="https://api.github.com/repos/co-cddo/my-repo/branches/dev/protection",
+        status_code=404,
+    )
+    httpx_mock.add_response(
+        url="https://api.github.com/repos/co-cddo/my-repo/rulesets",
+        json=[{"id": 42, "name": "idea-gh: dev"}],
+    )
+    httpx_mock.add_response(
+        url="https://api.github.com/repos/co-cddo/my-repo/rulesets/42",
+        json=_make_ruleset_response(
+            rules=_full_rules_with_merge_methods(allowed_merge_methods=["squash"]),
+        ),
+    )
+
+    type_config = RepoTypeConfig(
+        naming_pattern="gds-idea-app-{name}",
+        default_branch="dev",
+        branch_protection={
+            "dev": BranchProtectionConfig(
+                require_linear_history=True,
+                allowed_merge_methods=["squash"],
+            )
+        },
+    )
+    results = branches.audit("co-cddo", "my-repo", type_config, gh_client)
+    merge_results = [r for r in results if "merge_methods" in r.name]
+    assert len(merge_results) == 1
+    assert merge_results[0].status == CheckStatus.PASSED
+
+
+def test_allowed_merge_methods_fail(httpx_mock: HTTPXMock, gh_client: GitHubClient):
+    """Fails when actual merge methods don't match expected."""
+    httpx_mock.add_response(
+        url="https://api.github.com/repos/co-cddo/my-repo",
+        json={"default_branch": "dev"},
+    )
+    httpx_mock.add_response(
+        url="https://api.github.com/repos/co-cddo/my-repo/branches/dev/protection",
+        status_code=404,
+    )
+    httpx_mock.add_response(
+        url="https://api.github.com/repos/co-cddo/my-repo/rulesets",
+        json=[{"id": 42, "name": "idea-gh: dev"}],
+    )
+    httpx_mock.add_response(
+        url="https://api.github.com/repos/co-cddo/my-repo/rulesets/42",
+        json=_make_ruleset_response(
+            rules=_full_rules_with_merge_methods(
+                allowed_merge_methods=["merge", "squash", "rebase"],
+            ),
+        ),
+    )
+
+    type_config = RepoTypeConfig(
+        naming_pattern="gds-idea-app-{name}",
+        default_branch="dev",
+        branch_protection={
+            "dev": BranchProtectionConfig(
+                require_linear_history=True,
+                allowed_merge_methods=["squash"],
+            )
+        },
+    )
+    results = branches.audit("co-cddo", "my-repo", type_config, gh_client)
+    merge_results = [r for r in results if "merge_methods" in r.name]
+    assert len(merge_results) == 1
+    assert merge_results[0].status == CheckStatus.FAILED
+    assert merge_results[0].fix_available is True
+
+
+def test_allowed_merge_methods_not_configured_skips(httpx_mock: HTTPXMock, gh_client: GitHubClient):
+    """No merge_methods check when config has empty list."""
+    httpx_mock.add_response(
+        url="https://api.github.com/repos/co-cddo/my-repo",
+        json={"default_branch": "dev"},
+    )
+    httpx_mock.add_response(
+        url="https://api.github.com/repos/co-cddo/my-repo/branches/dev/protection",
+        status_code=404,
+    )
+    httpx_mock.add_response(
+        url="https://api.github.com/repos/co-cddo/my-repo/rulesets",
+        json=[{"id": 42, "name": "idea-gh: dev"}],
+    )
+    httpx_mock.add_response(
+        url="https://api.github.com/repos/co-cddo/my-repo/rulesets/42",
+        json=_make_ruleset_response(rules=_full_rules()),
+    )
+
+    type_config = RepoTypeConfig(
+        naming_pattern="gds-idea-app-{name}",
+        default_branch="dev",
+        branch_protection={
+            "dev": BranchProtectionConfig(
+                require_linear_history=True,
+                allowed_merge_methods=[],
+            )
+        },
+    )
+    results = branches.audit("co-cddo", "my-repo", type_config, gh_client)
+    merge_results = [r for r in results if "merge_methods" in r.name]
+    assert len(merge_results) == 0
+
+
+def test_build_ruleset_payload_includes_allowed_merge_methods(gh_client: GitHubClient):
+    """Payload includes allowed_merge_methods when configured."""
+    bp = BranchProtectionConfig(
+        require_pr=True,
+        allowed_merge_methods=["squash"],
+    )
+    payload = branches.build_ruleset_payload("idea-gh: dev", "dev", bp, "co-cddo", gh_client)
+    pr_rule = [r for r in payload["rules"] if r["type"] == "pull_request"][0]
+    assert pr_rule["parameters"]["allowed_merge_methods"] == ["squash"]
+
+
+def test_build_ruleset_payload_omits_merge_methods_when_empty(gh_client: GitHubClient):
+    """Payload omits allowed_merge_methods when config list is empty."""
+    bp = BranchProtectionConfig(
+        require_pr=True,
+        allowed_merge_methods=[],
+    )
+    payload = branches.build_ruleset_payload("idea-gh: dev", "dev", bp, "co-cddo", gh_client)
+    pr_rule = [r for r in payload["rules"] if r["type"] == "pull_request"][0]
+    assert "allowed_merge_methods" not in pr_rule["parameters"]
