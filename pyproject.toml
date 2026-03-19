@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "gds-idea-gh-kit"
-version = "0.3.0"
+version = "0.3.1"
 description = "CLI tool for auditing and enforcing GitHub repo standards for GDS IDEA teams"
 readme = "README.md"
 authors = [
