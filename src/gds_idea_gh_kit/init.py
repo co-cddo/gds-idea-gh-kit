@@ -140,8 +140,9 @@ def init_repo(
             client.create_branch(org, repo_name, branch_name, default_branch)
             steps.append(f"Created {branch_name} branch from {default_branch}")
 
-    # 6. Attach teams
-    for team_slug, perm in config.teams.items():
+    # 6. Attach teams (global + type-specific)
+    all_teams = {**config.teams, **type_config.extra_teams}
+    for team_slug, perm in all_teams.items():
         api_perm = _PERM_TO_API.get(perm, perm)
         client.set_team_repo_permission(org, team_slug, org, repo_name, api_perm)
         steps.append(f"Attached team {team_slug} ({perm})")
