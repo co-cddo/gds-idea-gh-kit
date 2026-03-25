@@ -130,6 +130,21 @@ class RepoTypeConfig(BaseModel):
     branch_protection: dict[str, BranchProtectionConfig] = Field(default_factory=dict)
     required_workflows: list[str] = Field(default_factory=list)
     """Workflow filenames expected in .github/workflows/ (e.g. ['lint.yml', 'test.yml'])."""
+    excluded_files: list[str] = Field(default_factory=list)
+    """Global required_files entries to skip for this repo type."""
+    extra_teams: dict[str, str] = Field(default_factory=dict)
+    """Additional teams to attach for this repo type (additive to global teams)."""
+
+    @field_validator("extra_teams")
+    @classmethod
+    def extra_team_permissions_must_be_valid(cls, v: dict[str, str]) -> dict[str, str]:
+        valid = {"admin", "write", "read", "maintain", "triage"}
+        for team, perm in v.items():
+            if perm not in valid:
+                raise ValueError(
+                    f"Team '{team}' has invalid permission '{perm}'. Must be one of: {', '.join(sorted(valid))}"
+                )
+        return v
 
     @field_validator("naming_pattern")
     @classmethod
