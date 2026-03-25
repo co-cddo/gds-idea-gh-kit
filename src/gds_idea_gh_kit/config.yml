@@ -76,3 +76,25 @@ repo_types:
         bypass_teams: [gds-idea-super-admin]
         bypass_mode: pull_request
         allowed_merge_methods: [squash]
+
+  econ:
+    naming_pattern: "gds-idea-econ-{name}"
+    detection_files: []
+    default_branch: main
+    required_workflows: []
+    excluded_files:
+      - .github/dependabot.yml
+    extra_teams:
+      gds-idea-econ: write
+    branch_protection:
+      main:
+        require_pr: true
+        required_approvals: 0
+        dismiss_stale_reviews: true
+        require_linear_history: false
+        required_review_teams: []
+        prevent_deletion: true
+        prevent_force_push: true
+        bypass_teams: [gds-idea-super-admin]
+        bypass_mode: pull_request
+        allowed_merge_methods: [merge, squash]
