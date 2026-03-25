@@ -15,9 +15,11 @@ def test_load_bundled_config():
     assert config.org == "co-cddo"
     assert len(config.repo_types) > 0
     assert len(config.repo_prefixes) > 0
-    # Each repo type should have detection files
+    # Each repo type should have detection files (except name-only types like econ)
+    name_only_types = {"econ"}
     for type_name, type_config in config.repo_types.items():
-        assert len(type_config.detection_files) > 0, f"{type_name} has no detection_files"
+        if type_name not in name_only_types:
+            assert len(type_config.detection_files) > 0, f"{type_name} has no detection_files"
 
 
 def test_load_custom_config(tmp_path):
@@ -107,6 +109,15 @@ def test_naming_pattern_requires_placeholder():
         RepoTypeConfig(naming_pattern="no-placeholder", default_branch="main")
 
 
+def test_invalid_extra_team_permission():
+    with pytest.raises(ValidationError, match="invalid permission"):
+        RepoTypeConfig(
+            naming_pattern="gds-idea-econ-{name}",
+            default_branch="main",
+            extra_teams={"gds-idea-econ": "superadmin"},
+        )
+
+
 def test_extra_fields_rejected():
     with pytest.raises(ValidationError, match="extra"):
         Config(org="co-cddo", bogus_field="oops")
@@ -127,6 +138,16 @@ def test_extract_name():
     rt = RepoTypeConfig(naming_pattern="gds-idea-app-{name}", default_branch="dev")
     assert rt.extract_name("gds-idea-app-my-dashboard") == "my-dashboard"
     assert rt.extract_name("other-repo") is None
+
+
+def test_econ_naming_pattern():
+    rt = RepoTypeConfig(naming_pattern="gds-idea-econ-{name}", default_branch="main")
+    assert rt.matches_name("gds-idea-econ-housing") is True
+    assert rt.matches_name("gds-idea-econ-trade-model") is True
+    assert rt.matches_name("gds-idea-econ-") is False
+    assert rt.matches_name("gds-idea-app-foo") is False
+    assert rt.matches_name("gds-idea-housing") is False
+    assert rt.extract_name("gds-idea-econ-housing") == "housing"
 
 
 def test_has_known_prefix():
