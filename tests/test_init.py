@@ -284,3 +284,101 @@ def test_get_repo_name_from_directory(tmp_path):
         mock_path.cwd.return_value = tmp_path / "gds-idea-app-my-thing"
         name = get_repo_name_from_directory()
         assert name == "gds-idea-app-my-thing"
+
+
+# --- extra_teams ---
+
+
+def _econ_config() -> Config:
+    return Config(
+        org="co-cddo",
+        repo_prefixes=["gds-idea-"],
+        teams={
+            "gds-idea-all": "read",
+            "gds-idea-ds": "maintain",
+        },
+        repo_settings=RepoSettings(),
+        required_files=[".gitignore"],
+        security=SecurityConfig(),
+        repo_types={
+            "econ": RepoTypeConfig(
+                naming_pattern="gds-idea-econ-{name}",
+                detection_files=[],
+                default_branch="main",
+                required_workflows=[],
+                excluded_files=[".github/dependabot.yml"],
+                extra_teams={"gds-idea-econ": "write"},
+                branch_protection={
+                    "main": BranchProtectionConfig(
+                        require_pr=True,
+                        required_approvals=0,
+                        prevent_deletion=True,
+                        prevent_force_push=True,
+                        bypass_teams=["gds-idea-super-admin"],
+                        bypass_mode="pull_request",
+                    ),
+                },
+            ),
+        },
+    )
+
+
+@patch("gds_idea_gh_kit.init._run_git")
+def test_init_econ_attaches_extra_teams(mock_git, httpx_mock: HTTPXMock, gh_client: GitHubClient):
+    """Init for econ type should attach both global teams and extra_teams."""
+    mock_git.side_effect = _mock_git_success()
+
+    # 1. Create repo
+    httpx_mock.add_response(
+        url=f"{BASE}/orgs/co-cddo/repos",
+        method="POST",
+        json={"name": "gds-idea-econ-housing"},
+        status_code=201,
+    )
+
+    # 2. Update repo settings
+    httpx_mock.add_response(
+        url=f"{BASE}/repos/co-cddo/gds-idea-econ-housing",
+        method="PATCH",
+        json={"name": "gds-idea-econ-housing"},
+    )
+
+    # 3. Attach teams (2 global + 1 extra)
+    for team in ["gds-idea-all", "gds-idea-ds", "gds-idea-econ"]:
+        httpx_mock.add_response(
+            url=f"{BASE}/orgs/co-cddo/teams/{team}/repos/co-cddo/gds-idea-econ-housing",
+            method="PUT",
+            status_code=204,
+        )
+
+    # 4. Create ruleset — need team ID lookup for bypass
+    httpx_mock.add_response(
+        url=f"{BASE}/orgs/co-cddo/teams/gds-idea-super-admin",
+        method="GET",
+        json={"id": 999, "slug": "gds-idea-super-admin"},
+    )
+    httpx_mock.add_response(
+        url=f"{BASE}/repos/co-cddo/gds-idea-econ-housing/rulesets",
+        method="POST",
+        json={"id": 1, "name": "idea-gh: main"},
+        status_code=201,
+    )
+
+    # 5. Security
+    httpx_mock.add_response(
+        url=f"{BASE}/repos/co-cddo/gds-idea-econ-housing/vulnerability-alerts",
+        method="PUT",
+        status_code=204,
+    )
+    httpx_mock.add_response(
+        url=f"{BASE}/repos/co-cddo/gds-idea-econ-housing/automated-security-fixes",
+        method="PUT",
+        status_code=204,
+    )
+
+    config = _econ_config()
+    steps = init_repo("gds-idea-econ-housing", config, "econ", gh_client)
+
+    assert any("gds-idea-econ" in s and "write" in s for s in steps)
+    assert any("gds-idea-all" in s for s in steps)
+    assert any("gds-idea-ds" in s for s in steps)

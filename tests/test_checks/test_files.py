@@ -164,3 +164,61 @@ def test_alternative_none_exist(httpx_mock: HTTPXMock, gh_client: GitHubClient):
     assert "README.md" in results[0].message
     assert "docs/README.md" in results[0].message
     assert results[0].fix_available is False
+
+
+# --- excluded_files ---
+
+
+def test_excluded_file_is_skipped(httpx_mock: HTTPXMock, gh_client: GitHubClient):
+    """A file in excluded_files should not be checked at all."""
+    httpx_mock.add_response(
+        url="https://api.github.com/repos/co-cddo/my-repo/contents/.gitignore",
+        json={"name": ".gitignore"},
+    )
+    # No mock for dependabot.yml — it should never be requested
+
+    results = files.audit(
+        "co-cddo",
+        "my-repo",
+        [".gitignore", ".github/dependabot.yml"],
+        [],
+        gh_client,
+        excluded_files=[".github/dependabot.yml"],
+    )
+    assert len(results) == 1
+    assert results[0].status == CheckStatus.PASSED
+    assert ".gitignore" in results[0].message
+
+
+def test_excluded_or_entry_is_skipped(httpx_mock: HTTPXMock, gh_client: GitHubClient):
+    """An OR-style entry is excluded if any alternative appears in excluded_files."""
+    httpx_mock.add_response(
+        url="https://api.github.com/repos/co-cddo/my-repo/contents/.gitignore",
+        json={"name": ".gitignore"},
+    )
+
+    results = files.audit(
+        "co-cddo",
+        "my-repo",
+        [".gitignore", ["README.md", "docs/README.md"]],
+        [],
+        gh_client,
+        excluded_files=["README.md"],
+    )
+    assert len(results) == 1
+    assert ".gitignore" in results[0].message
+
+
+def test_excluded_files_empty_by_default(httpx_mock: HTTPXMock, gh_client: GitHubClient):
+    """When excluded_files is not passed, all files are checked (backwards compat)."""
+    httpx_mock.add_response(
+        url="https://api.github.com/repos/co-cddo/my-repo/contents/.gitignore",
+        json={"name": ".gitignore"},
+    )
+    httpx_mock.add_response(
+        url="https://api.github.com/repos/co-cddo/my-repo/contents/LICENSE",
+        json={"name": "LICENSE"},
+    )
+
+    results = files.audit("co-cddo", "my-repo", [".gitignore", "LICENSE"], [], gh_client)
+    assert len(results) == 2

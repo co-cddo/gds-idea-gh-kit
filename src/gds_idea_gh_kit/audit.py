@@ -82,14 +82,24 @@ def audit_repo(
     # 2. Settings
     report.results.extend(settings.audit(owner, repo, config.repo_settings, client))
 
-    # 3. Teams
-    report.results.extend(teams.audit(owner, repo, config.teams, client))
+    # 3. Teams (global + type-specific extra teams)
+    all_teams = {**config.teams, **type_config.extra_teams}
+    report.results.extend(teams.audit(owner, repo, all_teams, client))
 
     # 4. Branches (default branch + rulesets)
     report.results.extend(branches.audit(owner, repo, type_config, client))
 
     # 5. Files + workflows
-    report.results.extend(files.audit(owner, repo, config.required_files, type_config.required_workflows, client))
+    report.results.extend(
+        files.audit(
+            owner,
+            repo,
+            config.required_files,
+            type_config.required_workflows,
+            client,
+            excluded_files=type_config.excluded_files,
+        )
+    )
 
     # 6. Security
     report.results.extend(security.audit(owner, repo, config.security, client))
@@ -133,9 +143,10 @@ def fix_repo(
     except Exception as e:
         fix_report.errors.append(f"settings fix failed: {e}")
 
-    # Teams
+    # Teams (global + type-specific extra teams)
     try:
-        changes = teams.fix(owner, repo, config.teams, client)
+        all_teams = {**config.teams, **type_config.extra_teams}
+        changes = teams.fix(owner, repo, all_teams, client)
         fix_report.changes.extend(f"teams: {c}" for c in changes)
     except Exception as e:
         fix_report.errors.append(f"teams fix failed: {e}")
