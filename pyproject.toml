@@ -26,7 +26,7 @@ packages = ["src/gds_idea_gh_kit"]
 
 [dependency-groups]
 dev = [
-    "pytest>=8.0",
+    "pytest>=9.0.3",
     "pytest-httpx>=0.34",
     "ruff>=0.8.0",
 ]
