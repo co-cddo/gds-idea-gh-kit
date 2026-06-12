@@ -60,10 +60,10 @@ repo_types:
         allowed_merge_methods: [merge]
 
   python-package:
-    naming_pattern: "gds-idea-{name}"
+    naming_pattern: "gds-idea-pkg-{name}"
     detection_files: [pyproject.toml]
     default_branch: main
-    required_workflows: [lint.yml, test.yml]
+    required_workflows: [ci.yml, release.yml]
     branch_protection:
       main:
         require_pr: true

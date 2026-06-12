@@ -200,7 +200,7 @@ def _multi_type_config() -> Config:
                 default_branch="dev",
             ),
             "python-package": RepoTypeConfig(
-                naming_pattern="gds-idea-{name}",
+                naming_pattern="gds-idea-pkg-{name}",
                 detection_files=["pyproject.toml"],
                 default_branch="main",
             ),
@@ -228,16 +228,16 @@ def test_detect_python_package(httpx_mock: HTTPXMock, gh_client: GitHubClient):
 
     # cdk.json not found
     httpx_mock.add_response(
-        url=f"{base}/repos/co-cddo/gds-idea-utils/contents/cdk.json",
+        url=f"{base}/repos/co-cddo/gds-idea-pkg-utils/contents/cdk.json",
         status_code=404,
     )
     # pyproject.toml found
     httpx_mock.add_response(
-        url=f"{base}/repos/co-cddo/gds-idea-utils/contents/pyproject.toml",
+        url=f"{base}/repos/co-cddo/gds-idea-pkg-utils/contents/pyproject.toml",
         json={"name": "pyproject.toml"},
     )
 
-    assert detect_repo_type("co-cddo", "gds-idea-utils", config, gh_client) == "python-package"
+    assert detect_repo_type("co-cddo", "gds-idea-pkg-utils", config, gh_client) == "python-package"
 
 
 def test_detect_cdk_app_wins_over_python_package(httpx_mock: HTTPXMock, gh_client: GitHubClient):

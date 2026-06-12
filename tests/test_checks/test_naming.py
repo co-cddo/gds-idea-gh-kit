@@ -23,9 +23,12 @@ def test_name_does_not_match():
 
 
 def test_python_package_pattern():
-    rt = RepoTypeConfig(naming_pattern="gds-idea-{name}", default_branch="main")
-    results = naming.audit("gds-idea-utils", rt)
+    rt = RepoTypeConfig(naming_pattern="gds-idea-pkg-{name}", default_branch="main")
+    results = naming.audit("gds-idea-pkg-utils", rt)
     assert results[0].status == CheckStatus.PASSED
+
+    results = naming.audit("gds-idea-utils", rt)
+    assert results[0].status == CheckStatus.FAILED
 
     results = naming.audit("some-other-repo", rt)
     assert results[0].status == CheckStatus.FAILED
