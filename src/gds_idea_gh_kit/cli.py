@@ -13,6 +13,11 @@ if TYPE_CHECKING:
 
 from gds_idea_gh_kit import __version__
 
+# Short aliases for --type values
+_TYPE_ALIASES: dict[str, str] = {
+    "pkg": "python-package",
+}
+
 
 @click.group()
 @click.version_option(version=__version__, prog_name="idea-gh")
@@ -77,6 +82,10 @@ def audit(ctx: click.Context, repo_type: str | None, audit_all: bool, apply_fix:
         config = load_config(ctx.obj["config_path"])
     except ConfigError as e:
         raise click.ClickException(str(e))
+
+    # Resolve type aliases (e.g. "pkg" -> "python-package")
+    if repo_type:
+        repo_type = _TYPE_ALIASES.get(repo_type, repo_type)
 
     if repo_type and repo_type not in config.repo_types:
         raise click.ClickException(f"Unknown repo type '{repo_type}'. Available: {', '.join(config.repo_types.keys())}")
@@ -297,6 +306,9 @@ def init(ctx: click.Context, repo_type: str):
         config = load_config(ctx.obj["config_path"])
     except ConfigError as e:
         raise click.ClickException(str(e))
+
+    # Resolve type aliases (e.g. "pkg" -> "python-package")
+    repo_type = _TYPE_ALIASES.get(repo_type, repo_type)
 
     if repo_type not in config.repo_types:
         raise click.ClickException(f"Unknown repo type '{repo_type}'. Available: {', '.join(config.repo_types.keys())}")
