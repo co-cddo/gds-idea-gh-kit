@@ -16,6 +16,7 @@ from gds_idea_gh_kit.init import (
 from gds_idea_gh_kit.models import (
     BranchProtectionConfig,
     Config,
+    LabelConfig,
     RepoSettings,
     RepoTypeConfig,
     SecurityConfig,
@@ -37,6 +38,11 @@ def _test_config() -> Config:
         repo_settings=RepoSettings(),
         required_files=[".gitignore"],
         security=SecurityConfig(),
+        labels=[
+            LabelConfig(name="bump:major", color="d73a4a", description="Release: major version bump"),
+            LabelConfig(name="bump:minor", color="0e8a16", description="Release: minor version bump"),
+            LabelConfig(name="bump:patch", color="e4e669", description="Release: patch version bump (default)"),
+        ],
         repo_types={
             "cdk-app": RepoTypeConfig(
                 naming_pattern="gds-idea-app-{name}",
@@ -172,6 +178,15 @@ def _mock_all_api_calls(httpx_mock: HTTPXMock):
         status_code=204,
     )
 
+    # 8. Labels
+    for label in ["bump:major", "bump:minor", "bump:patch"]:
+        httpx_mock.add_response(
+            url=f"{BASE}/repos/co-cddo/gds-idea-app-dashboard/labels",
+            method="POST",
+            json={"name": label},
+            status_code=201,
+        )
+
 
 @patch("gds_idea_gh_kit.init._run_git")
 def test_init_repo_full_flow(mock_git, httpx_mock: HTTPXMock, gh_client: GitHubClient):
@@ -196,6 +211,9 @@ def test_init_repo_full_flow(mock_git, httpx_mock: HTTPXMock, gh_client: GitHubC
     assert any("ruleset" in s and "prod" in s for s in steps)
     assert any("vulnerability" in s for s in steps)
     assert any("automated security" in s for s in steps)
+    assert any("bump:major" in s for s in steps)
+    assert any("bump:minor" in s for s in steps)
+    assert any("bump:patch" in s for s in steps)
 
 
 @patch("gds_idea_gh_kit.init._run_git")

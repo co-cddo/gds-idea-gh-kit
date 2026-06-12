@@ -29,6 +29,17 @@ security:
   vulnerability_alerts: true
   automated_security_fixes: true
 
+labels:
+  - name: bump:major
+    color: d73a4a
+    description: "Release: major version bump"
+  - name: bump:minor
+    color: 0e8a16
+    description: "Release: minor version bump"
+  - name: bump:patch
+    color: e4e669
+    description: "Release: patch version bump (default)"
+
 repo_types:
   cdk-app:
     naming_pattern: "gds-idea-app-{name}"

@@ -337,3 +337,25 @@ class GitHubClient:
     def delete_branch(self, owner: str, repo: str, branch: str) -> None:
         """Delete a branch via the Git Refs API."""
         self._request("DELETE", f"/repos/{owner}/{repo}/git/refs/heads/{branch}")
+
+    # --- Labels ---
+
+    def list_labels(self, owner: str, repo: str) -> list[dict]:
+        """List all labels for a repository."""
+        return self._request("GET", f"/repos/{owner}/{repo}/labels").json()
+
+    def create_label(self, owner: str, repo: str, name: str, color: str, description: str = "") -> dict:
+        """Create a label on a repository."""
+        return self._request(
+            "POST",
+            f"/repos/{owner}/{repo}/labels",
+            json={"name": name, "color": color, "description": description},
+        ).json()
+
+    def update_label(self, owner: str, repo: str, name: str, color: str, description: str = "") -> dict:
+        """Update an existing label's colour and description."""
+        return self._request(
+            "PATCH",
+            f"/repos/{owner}/{repo}/labels/{name}",
+            json={"color": color, "description": description},
+        ).json()
