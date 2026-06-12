@@ -8,3 +8,28 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Added by idea-app adopt
+*.py[cod]
+*$py.class
+*.egg-info/
+.venv/
+venv/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+.pytest_cache/
+.hypothesis/
+.ruff_cache/
+.mypy_cache/
+.pyright/
+.env
+.envrc
+.vscode/
+.idea/
+.DS_Store
+**/.DS_Store
+src/*/_version.py
+*.new
