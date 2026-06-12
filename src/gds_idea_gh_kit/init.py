@@ -163,4 +163,9 @@ def init_repo(
         client.enable_automated_security_fixes(org, repo_name)
         steps.append("Enabled automated security fixes")
 
+    # 9. Create labels
+    for label in config.labels:
+        client.create_label(org, repo_name, label.name, label.color, label.description)
+        steps.append(f"Created label '{label.name}'")
+
     return steps

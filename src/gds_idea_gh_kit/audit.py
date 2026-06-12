@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from gds_idea_gh_kit.checks import branches, files, naming, security, settings, teams
+from gds_idea_gh_kit.checks import branches, files, labels, naming, security, settings, teams
 from gds_idea_gh_kit.github_client import GitHubClient
 from gds_idea_gh_kit.models import (
     AuditReport,
@@ -104,6 +104,9 @@ def audit_repo(
     # 6. Security
     report.results.extend(security.audit(owner, repo, config.security, client))
 
+    # 7. Labels
+    report.results.extend(labels.audit(owner, repo, config.labels, client))
+
     return report
 
 
@@ -165,6 +168,13 @@ def fix_repo(
         fix_report.changes.extend(f"security: {c}" for c in changes)
     except Exception as e:
         fix_report.errors.append(f"security fix failed: {e}")
+
+    # Labels
+    try:
+        changes = labels.fix(owner, repo, config.labels, client)
+        fix_report.changes.extend(f"labels: {c}" for c in changes)
+    except Exception as e:
+        fix_report.errors.append(f"labels fix failed: {e}")
 
     return fix_report
 

@@ -163,6 +163,13 @@ class RepoTypeConfig(BaseModel):
         return match.group(1) if match else None
 
 
+class LabelConfig(BaseModel):
+    name: str
+    color: str
+    """Hex colour without leading #."""
+    description: str = ""
+
+
 class RepoSettings(BaseModel):
     delete_branch_on_merge: bool = True
     allow_squash_merge: bool = True
@@ -191,6 +198,8 @@ class Config(BaseModel):
     """Required files. A string means the file must exist. A list of strings
     means at least one of the alternatives must exist (OR logic)."""
     security: SecurityConfig = Field(default_factory=SecurityConfig)
+    labels: list[LabelConfig] = Field(default_factory=list)
+    """Labels to create on every repo (checked by audit, created by init)."""
     repo_types: dict[str, RepoTypeConfig] = Field(default_factory=dict)
 
     @field_validator("default_visibility")
