@@ -55,6 +55,7 @@ dev = [
 [tool.ruff]
 line-length = 120
 target-version = "py311"
+extend-exclude = ["src/gds_idea_gh_kit/_version.py"]
 
 [tool.ruff.lint]
 select = [
