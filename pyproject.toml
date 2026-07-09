@@ -11,9 +11,9 @@ authors = [
 ]
 requires-python = ">=3.11"
 dependencies = [
-    "click>=8.0",
+    "click>=8.4.2",
     "httpx>=0.27",
-    "pydantic>=2.12.5",
+    "pydantic>=2.13.4",
     "pyyaml>=6.0",
 ]
 dynamic = ["version"]
@@ -47,9 +47,9 @@ LICENCE = "sha256:e6356e2315581a3c231279cbc7ca90111c55e9c10625b17a935359c800a355
 [dependency-groups]
 dev = [
     "pre-commit>=4.6.0",
-    "pytest>=9.0.0",
-    "pytest-httpx>=0.34",
-    "ruff>=0.14.0",
+    "pytest>=9.1.1",
+    "pytest-httpx>=0.36.2",
+    "ruff>=0.15.20",
 ]
 
 [tool.ruff]
