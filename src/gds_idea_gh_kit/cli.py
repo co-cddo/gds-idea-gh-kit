@@ -452,3 +452,53 @@ def remove_collaborators(ctx: click.Context, usernames: tuple[str, ...], remove_
             click.echo(f"  Removed {username}")
 
         click.echo(f"\nRemoved {len(to_remove)} direct collaborator(s).")
+
+@cli.command("show-id")
+@click.option("--org", help="Show organisation ID.")
+@click.option("--repo", help="Show repository ID.")
+@click.pass_context
+def show_id(ctx: click.Context, org: str, repo: str):
+    """Show organisation or repo ID.
+
+    \b
+    Examples:
+      idea-gh show-id
+      idea-gh show-id --repo gds-idea-gh-kit
+      idea-gh show-id --repo gds-idea-gh-kit --org co-cddo
+    """
+    from gds_idea_gh_kit.config import ConfigError, load_config
+    from gds_idea_gh_kit.github_client import AuthError, GitHubClient, GitHubClientError
+    from gds_idea_gh_kit.repo_info import RepoInfoError, get_repo_from_remote
+
+    if org is None and repo is None:
+        try:
+            org, repo = get_repo_from_remote()
+        except RepoInfoError as e:
+            pass
+    elif org is None:
+        try:
+            config = load_config(ctx.obj["config_path"])
+            org = config.org
+        except ConfigError as e:
+            raise click.ClickException(str(e))
+
+    with GitHubClient(org=org) as client:
+        try:
+            client.verify_connection()
+        except (GitHubClientError, AuthError) as e:
+            raise click.ClickException(str(e))
+
+        try:
+            org_id = client.get_org(org)["id"]
+        except (GitHubClientError, AuthError) as e:
+            raise click.ClickException(str(e))
+        click.echo( f" Organisation: {org}, id: {org_id}" )
+
+        if repo is not None:
+            try:
+                repo_id = client.get_repo(org, repo)["id"]
+            except (GitHubClientError, AuthError) as e:
+                raise click.ClickException(str(e))
+            click.echo( f" Repository: {repo}, id: {repo_id}" )
+
+        
