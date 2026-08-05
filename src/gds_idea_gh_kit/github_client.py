@@ -119,6 +119,12 @@ class GitHubClient:
             raise GitHubClientError(f"GitHub API error {response.status_code} on {method} {path}: {body}")
         return response
 
+    # --- Organisation ---
+
+    def get_org(self, org: str) -> dict:
+        """Get owner details."""
+        return self._request("GET", f"/orgs/{org}").json()
+
     # --- Repository ---
 
     def get_repo(self, owner: str, repo: str) -> dict:
