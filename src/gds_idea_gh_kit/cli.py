@@ -455,49 +455,57 @@ def remove_collaborators(ctx: click.Context, usernames: tuple[str, ...], remove_
 
 
 @cli.command("show-id")
-@click.option("--org", help="Show organisation ID.")
+@click.option("--org", is_flag=True, help="Show organisation ID.")
 @click.option("--repo", help="Show repository ID.")
 @click.pass_context
-def show_id(ctx: click.Context, org: str, repo: str):
+def show_id(ctx: click.Context, org: bool, repo: str):
     """Show organisation or repo ID.
+
+    Show current directory repository id and optionally owner id.
+    Or pass repository name from config organisation and show its id
+    and optionally owner id.
 
     \b
     Examples:
       idea-gh show-id
       idea-gh show-id --repo gds-idea-gh-kit
-      idea-gh show-id --repo gds-idea-gh-kit --org co-cddo
+      idea-gh show-id --org
+      idea-gh show-id --repo gds-idea-gh-kit --org
     """
     from gds_idea_gh_kit.config import ConfigError, load_config
     from gds_idea_gh_kit.github_client import AuthError, GitHubClient, GitHubClientError
     from gds_idea_gh_kit.repo_info import RepoInfoError, get_repo_from_remote
 
-    if org is None and repo is None:
+    owner = None
+    if repo is None:
         try:
-            org, repo = get_repo_from_remote()
+            owner, repo = get_repo_from_remote()
         except RepoInfoError:
             pass
-    elif org is None:
+
+    if org and owner is None:
         try:
             config = load_config(ctx.obj["config_path"])
-            org = config.org
+            owner = config.org
         except ConfigError as e:
             raise click.ClickException(str(e))
 
-    with GitHubClient(org=org) as client:
+    with GitHubClient(org=owner) as client:
         try:
             client.verify_connection()
         except (GitHubClientError, AuthError) as e:
             raise click.ClickException(str(e))
 
-        try:
-            org_id = client.get_org(org)["id"]
-        except (GitHubClientError, AuthError) as e:
-            raise click.ClickException(str(e))
-        click.echo(f" Organisation: {org}, id: {org_id}")
+        if org:
+            try:
+                owner_id = client.get_org(owner)["id"]
+            except (GitHubClientError, AuthError) as e:
+                raise click.ClickException(str(e))
+            click.echo(f" Organisation: {owner}, id: {owner_id}")
 
         if repo is not None:
             try:
-                repo_id = client.get_repo(org, repo)["id"]
+                repo_id = client.get_repo(owner, repo)["id"]
             except (GitHubClientError, AuthError) as e:
                 raise click.ClickException(str(e))
             click.echo(f" Repository: {repo}, id: {repo_id}")
