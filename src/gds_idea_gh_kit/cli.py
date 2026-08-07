@@ -496,7 +496,7 @@ def show_id(ctx: click.Context, org: bool, repo: str):
             "Run from inside a repo, or pass --repo <name> and/or --org."
         )
 
-    with GitHubClient(org=owner) as client:
+    with GitHubClient(org=owner if org else None) as client:
         try:
             client.verify_connection()
         except (GitHubClientError, AuthError) as e:
