@@ -29,10 +29,10 @@ def get_repo_from_remote() -> tuple[str, str]:
         raise RepoInfoError("Could not read git remote 'origin'. Are you inside a git repo with a remote configured?")
 
     url = result.stdout.strip()
-    return _parse_github_remote(url)
+    return parse_github_remote(url)
 
 
-def _parse_github_remote(url: str) -> tuple[str, str]:
+def parse_github_remote(url: str) -> tuple[str, str]:
     """Extract (owner, repo) from a GitHub remote URL.
 
     Supports:
