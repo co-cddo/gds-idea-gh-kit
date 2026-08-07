@@ -83,6 +83,8 @@ class FixReport(BaseModel):
     changes: list[str] = Field(default_factory=list)
     errors: list[str] = Field(default_factory=list)
     stale_branches: list[StaleBranch] = Field(default_factory=list)
+    branch_rename: tuple[str, str] | None = None
+    """(old_default, new_default) if the default branch was renamed, else None."""
 
 
 # --- Config models loaded from YAML ---
