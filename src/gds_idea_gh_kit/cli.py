@@ -490,6 +490,12 @@ def show_id(ctx: click.Context, org: bool, repo: str):
         except ConfigError as e:
             raise click.ClickException(str(e))
 
+    if repo is None and not org:
+        raise click.ClickException(
+            "Not in a git repo and no --repo or --org given. "
+            "Run from inside a repo, or pass --repo <name> and/or --org."
+        )
+
     with GitHubClient(org=owner) as client:
         try:
             client.verify_connection()
