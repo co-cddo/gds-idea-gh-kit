@@ -292,16 +292,20 @@ def _audit_ruleset(
 
 def fix(
     owner: str, repo: str, type_config: RepoTypeConfig, client: GitHubClient
-) -> tuple[list[str], list[StaleBranch]]:
+) -> tuple[list[str], list[StaleBranch], tuple[str, str] | None]:
     """Apply default branch and ruleset fixes.
 
-    Returns a tuple of (changes, stale_branches).  *stale_branches*
-    lists any branches that were superseded by the new default but
-    could not be renamed away (because the target already existed).
-    The caller is responsible for prompting the user about deletion.
+    Returns a tuple of (changes, stale_branches, branch_rename).
+    *stale_branches* lists any branches that were superseded by the new
+    default but could not be renamed away (because the target already
+    existed) — the caller is responsible for prompting the user about
+    deletion. *branch_rename* is (old_default, new_default) if the
+    default branch was renamed, else None — the caller can use this to
+    offer to migrate a local clone.
     """
     changes: list[str] = []
     stale_branches: list[StaleBranch] = []
+    branch_rename: tuple[str, str] | None = None
     repo_data = client.get_repo(owner, repo)
     org = client.org or owner
     old_default = repo_data["default_branch"]
@@ -311,6 +315,7 @@ def fix(
     if old_default != new_default:
         client.rename_default_branch(owner, repo, new_default)
         changes.append(f"Default branch: {old_default} -> {new_default}")
+        branch_rename = (old_default, new_default)
 
         # Check if the old branch still exists (rename vs set-default).
         # If rename succeeded, the old branch is gone.  If we fell back
@@ -350,7 +355,7 @@ def fix(
             client.create_ruleset(owner, repo, payload)
             changes.append(f"Created ruleset '{name}'")
 
-    return changes, stale_branches
+    return changes, stale_branches, branch_rename
 
 
 def build_ruleset_payload(
