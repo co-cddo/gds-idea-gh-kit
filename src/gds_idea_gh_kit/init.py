@@ -8,6 +8,7 @@ from pathlib import Path
 from gds_idea_gh_kit.checks.branches import build_ruleset_payload, ruleset_name
 from gds_idea_gh_kit.github_client import GitHubClient, GitHubClientError
 from gds_idea_gh_kit.models import Config
+from gds_idea_gh_kit.repo_info import RepoInfoError, parse_github_remote
 
 # GitHub API uses different permission names for writing vs config:
 #   Config uses: read, write, admin, maintain, triage
@@ -47,8 +48,14 @@ def _run_git(*args: str) -> str:
         raise InitError(f"git {' '.join(args)} failed: {e.stderr.strip()}")
 
 
-def _check_preconditions(repo_name: str, config: Config, repo_type: str) -> None:
-    """Validate preconditions before init. Raises InitError on failure."""
+def _check_preconditions(repo_name: str, config: Config, repo_type: str) -> bool:
+    """Validate preconditions before init.
+
+    Returns True if 'origin' already points at the target repo (e.g. it
+    was created with `gh repo create --source . --push`), meaning the
+    repo-creation and initial-push steps should be skipped. Raises
+    InitError on failure.
+    """
     # Must be inside a git repo
     try:
         _run_git("rev-parse", "--is-inside-work-tree")
@@ -61,16 +68,30 @@ def _check_preconditions(repo_name: str, config: Config, repo_type: str) -> None
     except InitError:
         raise InitError("Git repo has no commits. Run 'idea-app init' first to scaffold the project.")
 
-    # Must not already have a remote
+    # A remote is fine as long as it already points at the target repo
+    # (e.g. `gh repo create --source . --push` was used to create it).
+    # Anything else is a conflict — bail out rather than push over an
+    # unrelated repo.
+    repo_already_created = False
     try:
-        _run_git("remote", "get-url", "origin")
-        raise InitError(
-            "This repo already has a remote 'origin'. Use 'idea-gh audit --fix' to configure an existing repo."
-        )
-    except InitError as e:
-        if "already has a remote" in str(e):
-            raise
-        # No remote is what we want — continue
+        existing_url = _run_git("remote", "get-url", "origin")
+    except InitError:
+        existing_url = None
+
+    if existing_url:
+        try:
+            existing_owner, existing_repo = parse_github_remote(existing_url)
+        except RepoInfoError:
+            existing_owner, existing_repo = None, None
+
+        if existing_owner == config.org and existing_repo == repo_name:
+            repo_already_created = True
+        else:
+            raise InitError(
+                f"This repo already has a remote 'origin' pointing to '{existing_url}', "
+                f"which doesn't match the expected repo '{config.org}/{repo_name}'. "
+                "Use 'idea-gh audit --fix' to configure it, or remove the remote and re-run init."
+            )
 
     # Repo name must match the type's naming pattern
     type_config = config.repo_types[repo_type]
@@ -79,6 +100,8 @@ def _check_preconditions(repo_name: str, config: Config, repo_type: str) -> None
             f"Directory name '{repo_name}' does not match the expected naming "
             f"pattern for {repo_type}: {type_config.naming_pattern}"
         )
+
+    return repo_already_created
 
 
 def init_repo(
@@ -99,26 +122,34 @@ def init_repo(
     type_config = config.repo_types[repo_type]
     default_branch = type_config.default_branch
 
-    _check_preconditions(repo_name, config, repo_type)
+    repo_already_created = _check_preconditions(repo_name, config, repo_type)
 
-    # 1. Create the GitHub repo
-    try:
-        client.create_repo(
-            org,
-            repo_name,
-            visibility=config.default_visibility,
-            auto_init=False,
-        )
-    except GitHubClientError as e:
-        raise InitError(f"Failed to create repo: {e}")
-    steps.append(f"Created repo {org}/{repo_name} ({config.default_visibility})")
+    # 1. Create the GitHub repo (skip if one was already created and
+    # pushed, e.g. via `gh repo create --source . --push`)
+    if repo_already_created:
+        try:
+            client.get_repo(org, repo_name)
+        except GitHubClientError as e:
+            raise InitError(f"Remote 'origin' points at {org}/{repo_name}, but it wasn't found on GitHub: {e}")
+        steps.append(f"Using existing repo {org}/{repo_name}")
+    else:
+        try:
+            client.create_repo(
+                org,
+                repo_name,
+                visibility=config.default_visibility,
+                auto_init=False,
+            )
+        except GitHubClientError as e:
+            raise InitError(f"Failed to create repo: {e}")
+        steps.append(f"Created repo {org}/{repo_name} ({config.default_visibility})")
 
-    # 2. Add remote and push
-    _run_git("remote", "add", "origin", f"git@github.com:{org}/{repo_name}.git")
-    steps.append("Added remote origin")
+        # 2. Add remote and push
+        _run_git("remote", "add", "origin", f"git@github.com:{org}/{repo_name}.git")
+        steps.append("Added remote origin")
 
-    _run_git("push", "-u", "origin", "HEAD:main")
-    steps.append("Pushed to origin/main")
+        _run_git("push", "-u", "origin", "HEAD:main")
+        steps.append("Pushed to origin/main")
 
     # 3. Apply repo settings
     settings = config.repo_settings.model_dump()
