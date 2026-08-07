@@ -483,7 +483,7 @@ def show_id(ctx: click.Context, org: bool, repo: str):
         except RepoInfoError:
             pass
 
-    if org and owner is None:
+    if owner is None and (org or repo is not None):
         try:
             config = load_config(ctx.obj["config_path"])
             owner = config.org
