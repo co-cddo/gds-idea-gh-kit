@@ -119,6 +119,7 @@ def audit(ctx: click.Context, repo_type: str | None, audit_all: bool, apply_fix:
                 fix_result = fix_repo(owner, repo, config, client, report.repo_type)
                 _render_fix_result(fix_result)
                 _handle_stale_branches(fix_result, owner, repo, client)
+                _handle_branch_rename_migration(fix_result)
 
                 # Re-audit to show updated state
                 click.echo()
@@ -201,6 +202,60 @@ def _warn_stale_branches(fix_result, owner, repo, client):
             click.echo(
                 f"  ! Branch '{stale.branch}' has {stale.ahead_by} unmerged commit(s). Review and delete manually."
             )
+
+
+def _run_git_step(*args: str) -> tuple[bool, str]:
+    """Run a git command for local branch migration. Never raises.
+
+    Returns (success, output_or_error).
+    """
+    import subprocess
+
+    try:
+        result = subprocess.run(["git", *args], capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return False, str(e)
+
+    if result.returncode != 0:
+        return False, result.stderr.strip() or result.stdout.strip()
+    return True, result.stdout.strip()
+
+
+def _handle_branch_rename_migration(fix_result):
+    """Offer to update the local clone after the default branch was renamed."""
+    if fix_result.branch_rename is None:
+        return
+
+    old_default, new_default = fix_result.branch_rename
+    manual_hint = (
+        f"git branch -m {old_default} {new_default} && git fetch origin && "
+        f"git branch -u origin/{new_default} {new_default} && git remote set-head origin -a"
+    )
+
+    click.echo()
+    click.echo(f"The default branch was renamed from '{old_default}' to '{new_default}'.")
+    if not click.confirm(f"Update this local clone to track '{new_default}'?", default=False):
+        click.echo(f"  Leaving local clone on '{old_default}'. To migrate manually later, run:")
+        click.echo(f"    {manual_hint}")
+        return
+
+    steps = [
+        ("branch", "-m", old_default, new_default),
+        ("fetch", "origin"),
+        ("branch", "-u", f"origin/{new_default}", new_default),
+        ("remote", "set-head", "origin", "-a"),
+    ]
+    for args in steps:
+        ok, output = _run_git_step(*args)
+        command = "git " + " ".join(args)
+        if ok:
+            click.echo(f"  \u2713 {command}")
+        else:
+            click.echo(f"  \u2717 {command} failed: {output}")
+            click.echo(f"  Stopping local migration. To finish manually, run:\n    {manual_hint}")
+            return
+
+    click.echo(f"  Local clone now tracks '{new_default}'.")
 
 
 def _audit_all_repos(

@@ -360,10 +360,11 @@ def test_fix_rename_succeeds_no_stale_branch(httpx_mock: HTTPXMock, gh_client: G
     )
 
     type_config = _type_config_with_dev_default()
-    changes, stale_branches = branches.fix("co-cddo", "my-repo", type_config, gh_client)
+    changes, stale_branches, branch_rename = branches.fix("co-cddo", "my-repo", type_config, gh_client)
 
     assert any("main -> dev" in c for c in changes)
     assert len(stale_branches) == 0
+    assert branch_rename == ("main", "dev")
 
 
 def test_fix_fallback_reports_stale_merged_branch(httpx_mock: HTTPXMock, gh_client: GitHubClient):
@@ -423,13 +424,14 @@ def test_fix_fallback_reports_stale_merged_branch(httpx_mock: HTTPXMock, gh_clie
     )
 
     type_config = _type_config_with_dev_default()
-    changes, stale_branches = branches.fix("co-cddo", "my-repo", type_config, gh_client)
+    changes, stale_branches, branch_rename = branches.fix("co-cddo", "my-repo", type_config, gh_client)
 
     assert any("main -> dev" in c for c in changes)
     assert len(stale_branches) == 1
     assert stale_branches[0].branch == "main"
     assert stale_branches[0].default_branch == "dev"
     assert stale_branches[0].is_merged is True
+    assert branch_rename == ("main", "dev")
 
 
 def test_fix_fallback_reports_stale_unmerged_branch(httpx_mock: HTTPXMock, gh_client: GitHubClient):
@@ -489,12 +491,13 @@ def test_fix_fallback_reports_stale_unmerged_branch(httpx_mock: HTTPXMock, gh_cl
     )
 
     type_config = _type_config_with_dev_default()
-    changes, stale_branches = branches.fix("co-cddo", "my-repo", type_config, gh_client)
+    changes, stale_branches, branch_rename = branches.fix("co-cddo", "my-repo", type_config, gh_client)
 
     assert len(stale_branches) == 1
     assert stale_branches[0].branch == "main"
     assert stale_branches[0].ahead_by == 3
     assert stale_branches[0].is_merged is False
+    assert branch_rename == ("main", "dev")
 
 
 def test_fix_no_stale_when_default_already_correct(httpx_mock: HTTPXMock, gh_client: GitHubClient):
@@ -523,9 +526,10 @@ def test_fix_no_stale_when_default_already_correct(httpx_mock: HTTPXMock, gh_cli
     )
 
     type_config = _type_config_with_dev_default()
-    changes, stale_branches = branches.fix("co-cddo", "my-repo", type_config, gh_client)
+    changes, stale_branches, branch_rename = branches.fix("co-cddo", "my-repo", type_config, gh_client)
 
     assert len(stale_branches) == 0
+    assert branch_rename is None
 
 
 # --- Allowed merge methods ---
