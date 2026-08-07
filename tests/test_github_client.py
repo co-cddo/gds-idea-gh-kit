@@ -166,6 +166,31 @@ def test_delete_branch(httpx_mock: HTTPXMock):
     client.delete_branch("co-cddo", "my-repo", "main")  # should not raise
 
 
+# --- get_org ---
+
+
+def test_get_org(httpx_mock: HTTPXMock):
+    httpx_mock.add_response(
+        url=f"{BASE}/orgs/co-cddo",
+        json={"login": "co-cddo", "id": 12345},
+    )
+
+    client = GitHubClient(token="fake-token", org="co-cddo")
+    result = client.get_org("co-cddo")
+    assert result["id"] == 12345
+
+
+def test_get_org_not_found(httpx_mock: HTTPXMock):
+    httpx_mock.add_response(
+        url=f"{BASE}/orgs/does-not-exist",
+        status_code=404,
+    )
+
+    client = GitHubClient(token="fake-token", org="co-cddo")
+    with pytest.raises(GitHubClientError, match="Not found"):
+        client.get_org("does-not-exist")
+
+
 def test_rename_default_branch_noop_when_already_correct(httpx_mock: HTTPXMock):
     """When default branch is already correct, no rename needed."""
     httpx_mock.add_response(
