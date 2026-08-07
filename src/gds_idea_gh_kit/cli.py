@@ -146,15 +146,28 @@ def _render_fix_result(fix_result):
 
 def _handle_stale_branches(fix_result, owner, repo, client):
     """Prompt the user about stale branches left behind after a default branch change."""
+    from gds_idea_gh_kit.github_client import GitHubClientError
+
     for stale in fix_result.stale_branches:
         click.echo()
+
+        # GitHub's branch rename is asynchronous — a branch reported as
+        # "stale" right after a rename may have since been removed once
+        # the rename actually completed. Re-check before prompting.
+        if not client.branch_exists(owner, repo, stale.branch):
+            click.echo(f"Branch '{stale.branch}' no longer exists (GitHub's rename cleanup already removed it).")
+            continue
+
         if stale.is_merged:
             click.echo(
                 f"Branch '{stale.branch}' is fully merged into '{stale.default_branch}' and is no longer needed."
             )
             if click.confirm(f"Delete '{stale.branch}'?", default=False):
-                client.delete_branch(owner, repo, stale.branch)
-                click.echo(f"  \u2713 Deleted branch '{stale.branch}'")
+                try:
+                    client.delete_branch(owner, repo, stale.branch)
+                    click.echo(f"  \u2713 Deleted branch '{stale.branch}'")
+                except GitHubClientError:
+                    click.echo(f"  Branch '{stale.branch}' was already removed.")
             else:
                 click.echo(f"  Leaving '{stale.branch}' in place.")
         else:
@@ -167,15 +180,20 @@ def _handle_stale_branches(fix_result, owner, repo, client):
                 f"{stale.default_branch}...{stale.branch} --jq '.commits[].commit.message'"
             )
             if click.confirm(f"Delete '{stale.branch}' anyway?", default=False):
-                client.delete_branch(owner, repo, stale.branch)
-                click.echo(f"  \u2713 Deleted branch '{stale.branch}'")
+                try:
+                    client.delete_branch(owner, repo, stale.branch)
+                    click.echo(f"  \u2713 Deleted branch '{stale.branch}'")
+                except GitHubClientError:
+                    click.echo(f"  Branch '{stale.branch}' was already removed.")
             else:
                 click.echo(f"  Leaving '{stale.branch}' in place.")
 
 
-def _warn_stale_branches(fix_result, owner, repo):
+def _warn_stale_branches(fix_result, owner, repo, client):
     """Print warnings about stale branches (non-interactive, for --all mode)."""
     for stale in fix_result.stale_branches:
+        if not client.branch_exists(owner, repo, stale.branch):
+            continue
         if stale.is_merged:
             click.echo(f"  ! Branch '{stale.branch}' is fully merged into '{stale.default_branch}' and can be deleted:")
             click.echo(f"    gh api -X DELETE repos/{owner}/{repo}/git/refs/heads/{stale.branch}")
@@ -245,7 +263,7 @@ def _audit_all_repos(
             try:
                 fix_result = fix_repo(config.org, repo_name, config, client, detected_type)
                 _render_fix_result(fix_result)
-                _warn_stale_branches(fix_result, config.org, repo_name)
+                _warn_stale_branches(fix_result, config.org, repo_name, client)
 
                 # Re-audit to show updated state
                 click.echo()

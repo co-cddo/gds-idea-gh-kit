@@ -152,6 +152,29 @@ def test_compare_branches(httpx_mock: HTTPXMock):
     assert result["ahead_by"] == 3
 
 
+# --- branch_exists ---
+
+
+def test_branch_exists_true(httpx_mock: HTTPXMock):
+    httpx_mock.add_response(
+        url=f"{BASE}/repos/co-cddo/my-repo/git/ref/heads/main",
+        json={"ref": "refs/heads/main"},
+    )
+
+    client = GitHubClient(token="fake-token", org="co-cddo")
+    assert client.branch_exists("co-cddo", "my-repo", "main") is True
+
+
+def test_branch_exists_false(httpx_mock: HTTPXMock):
+    httpx_mock.add_response(
+        url=f"{BASE}/repos/co-cddo/my-repo/git/ref/heads/main",
+        status_code=404,
+    )
+
+    client = GitHubClient(token="fake-token", org="co-cddo")
+    assert client.branch_exists("co-cddo", "my-repo", "main") is False
+
+
 # --- delete_branch ---
 
 
