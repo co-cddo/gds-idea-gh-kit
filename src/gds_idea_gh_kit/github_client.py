@@ -340,6 +340,14 @@ class GitHubClient:
         """
         return self._request("GET", f"/repos/{owner}/{repo}/compare/{base}...{head}").json()
 
+    def branch_exists(self, owner: str, repo: str, branch: str) -> bool:
+        """Check if a branch still exists."""
+        try:
+            self._request("GET", f"/repos/{owner}/{repo}/git/ref/heads/{branch}")
+            return True
+        except GitHubClientError:
+            return False
+
     def delete_branch(self, owner: str, repo: str, branch: str) -> None:
         """Delete a branch via the Git Refs API."""
         self._request("DELETE", f"/repos/{owner}/{repo}/git/refs/heads/{branch}")
