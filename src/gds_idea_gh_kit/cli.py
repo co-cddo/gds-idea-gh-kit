@@ -507,11 +507,11 @@ def show_id(ctx: click.Context, org: bool, repo: str | None):
                 owner_id = client.get_org(owner)["id"]
             except (GitHubClientError, AuthError) as e:
                 raise click.ClickException(str(e))
-            click.echo(f" Organisation: {owner}, id: {owner_id}")
+            click.echo(f"  Organisation: {owner}, id: {owner_id}")
 
         if repo is not None:
             try:
                 repo_id = client.get_repo(owner, repo)["id"]
             except (GitHubClientError, AuthError) as e:
                 raise click.ClickException(str(e))
-            click.echo(f" Repository: {repo}, id: {repo_id}")
+            click.echo(f"  Repository: {repo}, id: {repo_id}")
