@@ -119,6 +119,15 @@ idea-gh remove-collaborators jane-doe bob-smith
 
 # Remove all direct collaborators
 idea-gh remove-collaborators --all
+
+# Show the repo ID for the current directory
+idea-gh show-id
+
+# Show the ID of a specific repo in the configured org
+idea-gh show-id --repo gds-idea-gh-kit
+
+# Show the configured org's ID (plus the current repo's, if run inside one)
+idea-gh show-id --org
 ```
 
 ## What gets fixed
