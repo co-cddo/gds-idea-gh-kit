@@ -458,7 +458,7 @@ def remove_collaborators(ctx: click.Context, usernames: tuple[str, ...], remove_
 @click.option("--org", is_flag=True, help="Show organisation ID.")
 @click.option("--repo", help="Show repository ID.")
 @click.pass_context
-def show_id(ctx: click.Context, org: bool, repo: str):
+def show_id(ctx: click.Context, org: bool, repo: str | None):
     """Show organisation or repo ID.
 
     Show current directory repository id and optionally owner id.
