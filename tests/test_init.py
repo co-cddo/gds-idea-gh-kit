@@ -69,12 +69,17 @@ def _test_config() -> Config:
     )
 
 
-def _mock_git_success(cmd_results: dict[tuple[str, ...], str] | None = None):
-    """Return a mock for _run_git that returns preset values."""
+def _mock_git_success(cmd_results: dict[tuple[str, ...], str] | None = None, remote_url: str | None = None):
+    """Return a mock for _run_git that returns preset values.
+
+    By default there's no 'origin' remote (raises, as git does when
+    none is configured). Pass *remote_url* to simulate a repo that
+    already has an 'origin' remote pointing at that URL.
+    """
     defaults: dict[tuple[str, ...], str] = {
         ("rev-parse", "--is-inside-work-tree"): "true",
         ("rev-parse", "HEAD"): "abc123",
-        ("remote", "get-url", "origin"): "",  # Will raise CalledProcessError
+        ("remote", "get-url", "origin"): remote_url or "",
         ("remote", "add", "origin"): "",
         ("push", "-u", "origin", "HEAD:main"): "",
         ("branch", "-m", "main", "dev"): "",
@@ -87,7 +92,7 @@ def _mock_git_success(cmd_results: dict[tuple[str, ...], str] | None = None):
     def fake_run_git(*args: str) -> str:
         key = tuple(args)
         # Simulate "no remote" by raising for remote get-url
-        if key == ("remote", "get-url", "origin"):
+        if key == ("remote", "get-url", "origin") and not remote_url:
             raise InitError("git remote get-url origin failed: ")
         if key in defaults:
             return defaults[key]
@@ -97,15 +102,26 @@ def _mock_git_success(cmd_results: dict[tuple[str, ...], str] | None = None):
     return fake_run_git
 
 
-def _mock_all_api_calls(httpx_mock: HTTPXMock):
-    """Mock all GitHub API calls for a successful init."""
-    # 1. Create repo
-    httpx_mock.add_response(
-        url=f"{BASE}/orgs/co-cddo/repos",
-        method="POST",
-        json={"name": "gds-idea-app-dashboard", "full_name": "co-cddo/gds-idea-app-dashboard"},
-        status_code=201,
-    )
+def _mock_all_api_calls(httpx_mock: HTTPXMock, repo_already_exists: bool = False):
+    """Mock all GitHub API calls for a successful init.
+
+    If *repo_already_exists*, the repo-creation step is replaced with
+    the GET used to confirm the pre-existing repo is reachable.
+    """
+    if repo_already_exists:
+        httpx_mock.add_response(
+            url=f"{BASE}/repos/co-cddo/gds-idea-app-dashboard",
+            method="GET",
+            json={"name": "gds-idea-app-dashboard", "full_name": "co-cddo/gds-idea-app-dashboard"},
+        )
+    else:
+        # 1. Create repo
+        httpx_mock.add_response(
+            url=f"{BASE}/orgs/co-cddo/repos",
+            method="POST",
+            json={"name": "gds-idea-app-dashboard", "full_name": "co-cddo/gds-idea-app-dashboard"},
+            status_code=201,
+        )
 
     # 2. Update repo settings
     httpx_mock.add_response(
@@ -227,8 +243,8 @@ def test_init_repo_rejects_bad_name(mock_git, httpx_mock: HTTPXMock, gh_client: 
 
 
 @patch("gds_idea_gh_kit.init._run_git")
-def test_init_repo_rejects_existing_remote(mock_git, httpx_mock: HTTPXMock, gh_client: GitHubClient):
-    """Init errors if the repo already has a remote."""
+def test_init_repo_rejects_mismatched_remote(mock_git, httpx_mock: HTTPXMock, gh_client: GitHubClient):
+    """Init errors if the existing remote points at a different repo."""
 
     def fake_git(*args):
         key = tuple(args)
@@ -237,13 +253,47 @@ def test_init_repo_rejects_existing_remote(mock_git, httpx_mock: HTTPXMock, gh_c
         if key == ("rev-parse", "HEAD"):
             return "abc123"
         if key == ("remote", "get-url", "origin"):
-            return "git@github.com:co-cddo/gds-idea-app-dashboard.git"
+            return "git@github.com:some-other-org/some-other-repo.git"
         return ""
 
     mock_git.side_effect = fake_git
 
     config = _test_config()
-    with pytest.raises(InitError, match="already has a remote"):
+    with pytest.raises(InitError, match="doesn't match the expected repo"):
+        init_repo("gds-idea-app-dashboard", config, "cdk-app", gh_client)
+
+
+@patch("gds_idea_gh_kit.init._run_git")
+def test_init_repo_reuses_existing_repo_when_remote_matches(mock_git, httpx_mock: HTTPXMock, gh_client: GitHubClient):
+    """When origin already points at the target repo (e.g. after
+    `gh repo create --source . --push`), init skips create/push and
+    configures the existing repo instead of erroring."""
+    mock_git.side_effect = _mock_git_success(remote_url="git@github.com:co-cddo/gds-idea-app-dashboard.git")
+    _mock_all_api_calls(httpx_mock, repo_already_exists=True)
+
+    config = _test_config()
+    steps = init_repo("gds-idea-app-dashboard", config, "cdk-app", gh_client)
+
+    assert any("Using existing repo" in s for s in steps)
+    assert not any("Created repo" in s for s in steps)
+    assert not any("Added remote" in s for s in steps)
+    assert not any("Pushed" in s for s in steps)
+    assert any("repo settings" in s for s in steps)
+    assert any("main -> dev" in s for s in steps)
+
+
+@patch("gds_idea_gh_kit.init._run_git")
+def test_init_repo_errors_when_remote_exists_but_repo_missing(mock_git, httpx_mock: HTTPXMock, gh_client: GitHubClient):
+    """Origin points at the target repo, but it's not actually on GitHub."""
+    mock_git.side_effect = _mock_git_success(remote_url="git@github.com:co-cddo/gds-idea-app-dashboard.git")
+    httpx_mock.add_response(
+        url=f"{BASE}/repos/co-cddo/gds-idea-app-dashboard",
+        method="GET",
+        status_code=404,
+    )
+
+    config = _test_config()
+    with pytest.raises(InitError, match="wasn't found on GitHub"):
         init_repo("gds-idea-app-dashboard", config, "cdk-app", gh_client)
 
 
