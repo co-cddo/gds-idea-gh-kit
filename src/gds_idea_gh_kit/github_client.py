@@ -85,8 +85,8 @@ class GitHubClient:
         # Check network + token
         try:
             response = self._client.get("/user")
-        except (httpx.ConnectError, httpx.TimeoutException):
-            raise GitHubClientError("Cannot reach api.github.com. Check your network connection and VPN.")
+        except (httpx.ConnectError, httpx.TimeoutException) as e:
+            raise GitHubClientError(f"Cannot reach api.github.com: {e}\nCheck your network connection and VPN.") from e
 
         if response.status_code == 401:
             raise AuthError("GitHub token is invalid or expired.\nRun 'gh auth login' to re-authenticate.")
@@ -97,8 +97,10 @@ class GitHubClient:
         if self.org:
             try:
                 org_response = self._client.get(f"/orgs/{self.org}")
-            except (httpx.ConnectError, httpx.TimeoutException):
-                raise GitHubClientError("Cannot reach api.github.com. Check your network connection and VPN.")
+            except (httpx.ConnectError, httpx.TimeoutException) as e:
+                raise GitHubClientError(
+                    f"Cannot reach api.github.com: {e}\nCheck your network connection and VPN."
+                ) from e
 
             if org_response.status_code in (404, 403):
                 raise GitHubClientError(

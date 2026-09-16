@@ -40,8 +40,28 @@ def test_verify_connection_network_error(httpx_mock: HTTPXMock):
     )
 
     client = GitHubClient(token="fake-token", org="co-cddo")
-    with pytest.raises(GitHubClientError, match="Cannot reach api.github.com"):
+    with pytest.raises(GitHubClientError, match="Cannot reach api.github.com") as exc_info:
         client.verify_connection()
+    assert "Connection refused" in str(exc_info.value)
+
+
+def test_verify_connection_certificate_error_detail_is_not_swallowed(httpx_mock: HTTPXMock):
+    """Regression test: httpx.ConnectError also covers TLS/certificate failures
+    (e.g. a corporate TLS-inspecting proxy whose CA isn't trusted), and the
+    real cause must be visible in the raised error rather than replaced with
+    a generic network/VPN message that gives no diagnostic signal.
+    """
+    httpx_mock.add_exception(
+        httpx.ConnectError(
+            "[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate"
+        ),
+        url="https://api.github.com/user",
+    )
+
+    client = GitHubClient(token="fake-token", org="co-cddo")
+    with pytest.raises(GitHubClientError, match="Cannot reach api.github.com") as exc_info:
+        client.verify_connection()
+    assert "CERTIFICATE_VERIFY_FAILED" in str(exc_info.value)
 
 
 def test_verify_connection_timeout(httpx_mock: HTTPXMock):
@@ -51,8 +71,9 @@ def test_verify_connection_timeout(httpx_mock: HTTPXMock):
     )
 
     client = GitHubClient(token="fake-token", org="co-cddo")
-    with pytest.raises(GitHubClientError, match="Cannot reach api.github.com"):
+    with pytest.raises(GitHubClientError, match="Cannot reach api.github.com") as exc_info:
         client.verify_connection()
+    assert "Read timed out" in str(exc_info.value)
 
 
 def test_verify_connection_org_not_accessible(httpx_mock: HTTPXMock):
@@ -68,6 +89,24 @@ def test_verify_connection_org_not_accessible(httpx_mock: HTTPXMock):
     client = GitHubClient(token="fake-token", org="co-cddo")
     with pytest.raises(GitHubClientError, match="Cannot access org"):
         client.verify_connection()
+
+
+def test_verify_connection_org_check_network_error_detail_is_not_swallowed(httpx_mock: HTTPXMock):
+    """Same regression as the /user check, but for the org-access request --
+    a second, separate except block with the same bug."""
+    httpx_mock.add_response(
+        url="https://api.github.com/user",
+        json={"login": "test-user"},
+    )
+    httpx_mock.add_exception(
+        httpx.ConnectError("[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed"),
+        url="https://api.github.com/orgs/co-cddo",
+    )
+
+    client = GitHubClient(token="fake-token", org="co-cddo")
+    with pytest.raises(GitHubClientError, match="Cannot reach api.github.com") as exc_info:
+        client.verify_connection()
+    assert "CERTIFICATE_VERIFY_FAILED" in str(exc_info.value)
 
 
 def test_verify_connection_org_forbidden(httpx_mock: HTTPXMock):
