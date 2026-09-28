@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
+
+from click.testing import CliRunner
 
 from gds_idea_gh_kit.cli import (
     _handle_branch_rename_migration,
     _handle_stale_branches,
     _run_git_step,
     _warn_stale_branches,
+    cli,
 )
 from gds_idea_gh_kit.github_client import GitHubClientError
 from gds_idea_gh_kit.models import FixReport, StaleBranch
@@ -159,6 +162,25 @@ def test_run_git_step_never_raises_when_git_missing(monkeypatch):
     ok, output = _run_git_step("fetch", "origin")  # should not raise
 
     assert ok is False
+
+
+# --- show_id ---
+
+
+@patch("gds_idea_gh_kit.github_client.GitHubClient")
+@patch("gds_idea_gh_kit.repo_info.get_repo_from_remote")
+def test_show_id_default_shows_repo_id_only(mock_get_remote, mock_client_cls):
+    """With no flags inside a git repo, only the repo id is printed (--org is a flag now)."""
+    mock_get_remote.return_value = ("co-cddo", "gds-idea-gh-kit")
+    client = MagicMock()
+    client.get_repo.return_value = {"id": 111}
+    mock_client_cls.return_value.__enter__.return_value = client
+
+    result = CliRunner().invoke(cli, ["show-id"])
+
+    assert result.exit_code == 0, result.output
+    assert "Repository: gds-idea-gh-kit, id: 111" in result.output
+    client.get_org.assert_not_called()
 
 
 # --- _handle_branch_rename_migration ---
