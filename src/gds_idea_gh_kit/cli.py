@@ -587,8 +587,8 @@ def show_id(ctx: click.Context, org: bool, repo: str | None):
                 repo_id = client.get_repo(owner, repo)["id"]
             except (GitHubClientError, AuthError) as e:
                 raise click.ClickException(str(e))
-            click.echo(f" Repository: {repo}, id: {repo_id}")
+            click.echo(f"  Repository: {repo}, id: {repo_id}")
             sub_claim_prefix = client._request("GET", f"/repos/{owner}/{repo}/actions/oidc/customization/sub").json()[
                 "sub_claim_prefix"
             ]
-            click.echo(f" OIDC claim prefix: {sub_claim_prefix}")
+            click.echo(f"  OIDC claim prefix: {sub_claim_prefix}")
