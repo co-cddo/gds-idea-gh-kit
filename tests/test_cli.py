@@ -170,7 +170,7 @@ def test_run_git_step_never_raises_when_git_missing(monkeypatch):
 @patch("gds_idea_gh_kit.github_client.GitHubClient")
 @patch("gds_idea_gh_kit.repo_info.get_repo_from_remote")
 def test_show_id_default_shows_repo_id_only(mock_get_remote, mock_client_cls):
-    """With no flags inside a git repo, only the repo id is printed (--org is a flag now)."""
+    """With no flags inside a git repo, the repo id is printed and oidc sub prefix (--org is a flag now)."""
     mock_get_remote.return_value = ("co-cddo", "gds-idea-gh-kit")
     client = MagicMock()
     client.get_repo.return_value = {"id": 111}
