@@ -120,7 +120,7 @@ idea-gh remove-collaborators jane-doe bob-smith
 # Remove all direct collaborators
 idea-gh remove-collaborators --all
 
-# Show the repo ID for the current directory
+# Show the repo ID and OIDC sub prefix claim for the current directory
 idea-gh show-id
 
 # Show the ID of a specific repo in the configured org

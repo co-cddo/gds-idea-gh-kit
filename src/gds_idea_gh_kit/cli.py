@@ -534,7 +534,7 @@ def remove_collaborators(ctx: click.Context, usernames: tuple[str, ...], remove_
 def show_id(ctx: click.Context, org: bool, repo: str | None):
     """Show organisation or repo ID.
 
-    Show current directory repository id and optionally owner id.
+    Show current directory repository id and oidc sub claim prefix and optionally owner id.
     Or pass repository name from config organisation and show its id
     and optionally owner id.
 
