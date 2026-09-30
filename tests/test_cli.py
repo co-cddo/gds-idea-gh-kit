@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
+
+from click.testing import CliRunner
 
 from gds_idea_gh_kit.cli import (
     _handle_branch_rename_migration,
     _handle_stale_branches,
     _run_git_step,
     _warn_stale_branches,
+    cli,
 )
 from gds_idea_gh_kit.github_client import GitHubClientError
 from gds_idea_gh_kit.models import FixReport, StaleBranch
@@ -159,6 +162,62 @@ def test_run_git_step_never_raises_when_git_missing(monkeypatch):
     ok, output = _run_git_step("fetch", "origin")  # should not raise
 
     assert ok is False
+
+
+# --- show_id ---
+
+
+@patch("gds_idea_gh_kit.github_client.GitHubClient")
+@patch("gds_idea_gh_kit.repo_info.get_repo_from_remote")
+def test_show_id_default_shows_repo_id_and_oidc_claim_prefix(mock_get_remote, mock_client_cls):
+    """With no flags inside a git repo, the repo id and OIDC sub claim prefix are printed
+    (--org is a flag now)."""
+    mock_get_remote.return_value = ("co-cddo", "x")
+    client = MagicMock()
+    client.get_repo.return_value = {"id": 111}
+    client.get_oidc_sub_claim.return_value = {"sub_claim_prefix": "repo:co-cddo/x"}
+    mock_client_cls.return_value.__enter__.return_value = client
+
+    result = CliRunner().invoke(cli, ["show-id"])
+
+    assert result.exit_code == 0, result.output
+    assert "Repository: x, id: 111" in result.output
+    assert "OIDC claim prefix: repo:co-cddo/x" in result.output
+    client.get_org.assert_not_called()
+
+
+@patch("gds_idea_gh_kit.github_client.GitHubClient")
+@patch("gds_idea_gh_kit.repo_info.get_repo_from_remote")
+def test_show_id_shows_immutable_oidc_claim_prefix(mock_get_remote, mock_client_cls):
+    """Repos with immutable IDs enabled get a sub claim prefix pinned to org/repo IDs."""
+    mock_get_remote.return_value = ("co-cddo", "x")
+    client = MagicMock()
+    client.get_repo.return_value = {"id": 456}
+    client.get_oidc_sub_claim.return_value = {"sub_claim_prefix": "repo:co-cddo@123/x@456"}
+    mock_client_cls.return_value.__enter__.return_value = client
+
+    result = CliRunner().invoke(cli, ["show-id"])
+
+    assert result.exit_code == 0, result.output
+    assert "Repository: x, id: 456" in result.output
+    assert "OIDC claim prefix: repo:co-cddo@123/x@456" in result.output
+
+
+@patch("gds_idea_gh_kit.github_client.GitHubClient")
+@patch("gds_idea_gh_kit.repo_info.get_repo_from_remote")
+def test_show_id_oidc_api_error(mock_get_remote, mock_client_cls):
+    """An API error fetching the OIDC sub claim prefix surfaces as a ClickException."""
+    mock_get_remote.return_value = ("co-cddo", "x")
+    client = MagicMock()
+    client.get_repo.return_value = {"id": 111}
+    client.get_oidc_sub_claim.side_effect = GitHubClientError("boom")
+    mock_client_cls.return_value.__enter__.return_value = client
+
+    result = CliRunner().invoke(cli, ["show-id"])
+
+    assert result.exit_code != 0
+    assert "Repository: x, id: 111" in result.output
+    assert "boom" in result.output
 
 
 # --- _handle_branch_rename_migration ---

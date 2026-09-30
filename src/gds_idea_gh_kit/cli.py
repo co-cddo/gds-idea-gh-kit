@@ -534,7 +534,7 @@ def remove_collaborators(ctx: click.Context, usernames: tuple[str, ...], remove_
 def show_id(ctx: click.Context, org: bool, repo: str | None):
     """Show organisation or repo ID.
 
-    Show current directory repository id and optionally owner id.
+    Show current directory repository id and oidc sub claim prefix and optionally owner id.
     Or pass repository name from config organisation and show its id
     and optionally owner id.
 
@@ -577,14 +577,20 @@ def show_id(ctx: click.Context, org: bool, repo: str | None):
 
         if org:
             try:
-                owner_id = client.get_org(owner)["id"]
+                owner_id = client.get_org(owner).get("id")
             except (GitHubClientError, AuthError) as e:
                 raise click.ClickException(str(e))
             click.echo(f"  Organisation: {owner}, id: {owner_id}")
 
         if repo is not None:
             try:
-                repo_id = client.get_repo(owner, repo)["id"]
+                repo_id = client.get_repo(owner, repo).get("id")
             except (GitHubClientError, AuthError) as e:
                 raise click.ClickException(str(e))
             click.echo(f"  Repository: {repo}, id: {repo_id}")
+
+            try:
+                sub_claim_prefix = client.get_oidc_sub_claim(owner, repo).get("sub_claim_prefix")
+            except (GitHubClientError, AuthError) as e:
+                raise click.ClickException(str(e))
+            click.echo(f"  OIDC claim prefix: {sub_claim_prefix}")

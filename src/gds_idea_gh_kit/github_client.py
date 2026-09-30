@@ -373,3 +373,12 @@ class GitHubClient:
             f"/repos/{owner}/{repo}/labels/{name}",
             json={"color": color, "description": description},
         ).json()
+
+    # --- Actions ---
+
+    def get_oidc_sub_claim(self, owner: str, repo: str) -> dict:
+        """Get OIDC sub claim prefix."""
+        return self._request(
+            "GET",
+            f"/repos/{owner}/{repo}/actions/oidc/customization/sub",
+        ).json()
