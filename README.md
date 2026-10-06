@@ -166,6 +166,18 @@ See [`config.example.yml`](config.example.yml) for the full configuration refere
 - **`security`** -- vulnerability alerts, automated security fixes
 - **`repo_types`** -- per-type settings (naming pattern, default branch, branch protection, required workflows)
 
+## Agent skill
+
+[`skills/idea-gh-usage/SKILL.md`](skills/idea-gh-usage/SKILL.md) teaches AI coding agents such as
+OpenCode when and how to use `idea-gh`. Developers receive it through
+[`idea-oc`](https://github.com/co-cddo/gds-idea-pkg-oc) (`idea-oc sync`), which installs the team's
+approved skills.
+
+The skill describes this tool, so change it in the same pull request as any change to a command, flag,
+repo type, team or label. `tests/test_skill.py` fails if the skill mentions a command or flag that no
+longer exists, names a different naming pattern, team or label from the built-in config, or leaves a
+command out.
+
 ## Development
 
 ```bash
