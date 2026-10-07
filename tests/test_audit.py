@@ -19,7 +19,8 @@ from gds_idea_gh_kit.models import (
 
 def _minimal_config() -> Config:
     return Config(
-        org="co-cddo",
+        organisations=["co-cddo"],
+        default_organisation="co-cddo",
         repo_prefixes=["gds-idea-"],
         teams={"cddo-admins": "admin"},
         repo_settings=RepoSettings(),
@@ -187,7 +188,8 @@ def test_audit_repo_explicit_type(httpx_mock: HTTPXMock, gh_client: GitHubClient
 def _multi_type_config() -> Config:
     """Config with both cdk-app and python-package types."""
     return Config(
-        org="co-cddo",
+        organisations=["co-cddo"],
+        default_organisation="co-cddo",
         repo_prefixes=["gds-idea-"],
         teams={},
         repo_settings=RepoSettings(),

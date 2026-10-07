@@ -57,7 +57,7 @@ def check_config(ctx: click.Context):
 
 @cli.command("audit")
 @click.option("--type", "repo_type", default=None, help="Override repo type detection.")
-@click.option("--org", "repo_organisation", default=None, help="Override repo deafult organisation.")
+@click.option("--org", "repo_organisation", default=None, help="Override the default organisation.")
 @click.option("--all", "audit_all", is_flag=True, help="Audit all repos in the org.")
 @click.option("--fix", "apply_fix", is_flag=True, help="Auto-fix issues where possible.")
 @click.option("--verbose", is_flag=True, help="Show all checks including passing.")
@@ -68,7 +68,10 @@ def audit(
     """Audit repo(s) against the configured standards.
 
     Run from inside a repo to audit that repo, or use --all to audit
-    every repo in the org that matches a known prefix.
+    every repo in the org that matches a known prefix. With --all, use
+    --org to audit an organisation other than the configured default
+    (must be one of the configured organisations); without --all, the
+    org is taken from the repo's own git remote.
 
     Use --fix to automatically correct issues where possible (settings,
     teams, branch rulesets, security).
@@ -367,7 +370,7 @@ def _audit_all_repos(
     required=True,
     help="Repo type (e.g. cdk-app). Determines naming, branches, and rulesets.",
 )
-@click.option("--org", "repo_organisation", default=None, help="Override repo deafult organisation.")
+@click.option("--org", "repo_organisation", default=None, help="Override the default organisation.")
 @click.pass_context
 def init(ctx: click.Context, repo_type: str, repo_organisation: str):
     """Create a GitHub repo and configure it to pass audit.
@@ -376,10 +379,15 @@ def init(ctx: click.Context, repo_type: str, repo_organisation: str):
     Creates the GitHub repo, pushes, and applies all standard settings,
     teams, branch protection, and security configuration.
 
+    Creates the repo in the configured default organisation, or use
+    --org to target a different organisation (must be one of the
+    configured organisations).
+
     \b
     Example:
       cd gds-idea-app-my-dashboard
       idea-gh init --type cdk-app
+      idea-gh init --type cdk-app --org gds-dtx
     """
     from gds_idea_gh_kit.config import ConfigError, load_config
     from gds_idea_gh_kit.github_client import AuthError, GitHubClient, GitHubClientError
@@ -419,7 +427,7 @@ def init(ctx: click.Context, repo_type: str, repo_organisation: str):
         click.echo(f"Initialising {repo_name} as {repo_type}...\n")
 
         try:
-            steps = init_repo(repo_name, config, repo_type, client)
+            steps = init_repo(repo_name, repo_organisation, config, repo_type, client)
         except InitError as e:
             raise click.ClickException(str(e))
 
@@ -554,18 +562,21 @@ def remove_collaborators(ctx: click.Context, usernames: tuple[str, ...], remove_
 @click.option("--org", "repo_organisation", default=None, help="Organisation name.")
 @click.pass_context
 def show_id(ctx: click.Context, repo_name: str, repo_organisation: str):
-    """Show organisation or repo ID.
+    """Show organisation and repo IDs, and the repo's OIDC sub claim prefix.
 
-    Show current directory repository id and oidc sub claim prefix and optionally owner id.
-    Or pass repository name from config organisation and show its id
-    and optionally owner id.
+    With no flags, run from inside a repo: shows that repo's organisation
+    id, repo id, and OIDC sub claim prefix. Use --repo to look up a
+    repository by name instead of the current directory's remote, and
+    --org to target an organisation other than the configured default
+    (must be one of the configured organisations). Note: --org alone,
+    without --repo, is overridden by the current directory's remote
+    when run inside a git repo.
 
     \b
     Examples:
       idea-gh show-id
       idea-gh show-id --repo gds-idea-gh-kit
-      idea-gh show-id --org
-      idea-gh show-id --repo gds-idea-gh-kit --org
+      idea-gh show-id --repo gds-idea-gh-kit --org gds-dtx
     """
     from gds_idea_gh_kit.config import ConfigError, load_config
     from gds_idea_gh_kit.github_client import AuthError, GitHubClient, GitHubClientError

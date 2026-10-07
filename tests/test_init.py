@@ -27,7 +27,8 @@ BASE = "https://api.github.com"
 
 def _test_config() -> Config:
     return Config(
-        org="co-cddo",
+        organisations=["co-cddo"],
+        default_organisation="co-cddo",
         repo_prefixes=["gds-idea-"],
         teams={
             "gds-idea-all": "read",
@@ -211,7 +212,7 @@ def test_init_repo_full_flow(mock_git, httpx_mock: HTTPXMock, gh_client: GitHubC
     _mock_all_api_calls(httpx_mock)
 
     config = _test_config()
-    steps = init_repo("gds-idea-app-dashboard", config, "cdk-app", gh_client)
+    steps = init_repo("gds-idea-app-dashboard", "co-cddo", config, "cdk-app", gh_client)
 
     assert any("Created repo" in s for s in steps)
     assert any("Added remote" in s for s in steps)
@@ -239,7 +240,7 @@ def test_init_repo_rejects_bad_name(mock_git, httpx_mock: HTTPXMock, gh_client: 
 
     config = _test_config()
     with pytest.raises(InitError, match="does not match"):
-        init_repo("bad-repo-name", config, "cdk-app", gh_client)
+        init_repo("bad-repo-name", "co-cddo", config, "cdk-app", gh_client)
 
 
 @patch("gds_idea_gh_kit.init._run_git")
@@ -260,7 +261,7 @@ def test_init_repo_rejects_mismatched_remote(mock_git, httpx_mock: HTTPXMock, gh
 
     config = _test_config()
     with pytest.raises(InitError, match="doesn't match the expected repo"):
-        init_repo("gds-idea-app-dashboard", config, "cdk-app", gh_client)
+        init_repo("gds-idea-app-dashboard", "co-cddo", config, "cdk-app", gh_client)
 
 
 @patch("gds_idea_gh_kit.init._run_git")
@@ -272,7 +273,7 @@ def test_init_repo_reuses_existing_repo_when_remote_matches(mock_git, httpx_mock
     _mock_all_api_calls(httpx_mock, repo_already_exists=True)
 
     config = _test_config()
-    steps = init_repo("gds-idea-app-dashboard", config, "cdk-app", gh_client)
+    steps = init_repo("gds-idea-app-dashboard", "co-cddo", config, "cdk-app", gh_client)
 
     assert any("Using existing repo" in s for s in steps)
     assert not any("Created repo" in s for s in steps)
@@ -294,7 +295,7 @@ def test_init_repo_errors_when_remote_exists_but_repo_missing(mock_git, httpx_mo
 
     config = _test_config()
     with pytest.raises(InitError, match="wasn't found on GitHub"):
-        init_repo("gds-idea-app-dashboard", config, "cdk-app", gh_client)
+        init_repo("gds-idea-app-dashboard", "co-cddo", config, "cdk-app", gh_client)
 
 
 @patch("gds_idea_gh_kit.init._run_git")
@@ -308,7 +309,7 @@ def test_init_repo_rejects_no_git_repo(mock_git, httpx_mock: HTTPXMock, gh_clien
 
     config = _test_config()
     with pytest.raises(InitError, match="Not inside a git repo"):
-        init_repo("gds-idea-app-dashboard", config, "cdk-app", gh_client)
+        init_repo("gds-idea-app-dashboard", "co-cddo", config, "cdk-app", gh_client)
 
 
 @patch("gds_idea_gh_kit.init._run_git")
@@ -325,7 +326,7 @@ def test_init_repo_rejects_no_commits(mock_git, httpx_mock: HTTPXMock, gh_client
 
     config = _test_config()
     with pytest.raises(InitError, match="no commits"):
-        init_repo("gds-idea-app-dashboard", config, "cdk-app", gh_client)
+        init_repo("gds-idea-app-dashboard", "co-cddo", config, "cdk-app", gh_client)
 
 
 @patch("gds_idea_gh_kit.init._run_git")
@@ -343,7 +344,7 @@ def test_init_repo_handles_create_failure(mock_git, httpx_mock: HTTPXMock, gh_cl
 
     config = _test_config()
     with pytest.raises(InitError, match="Failed to create repo"):
-        init_repo("gds-idea-app-dashboard", config, "cdk-app", gh_client)
+        init_repo("gds-idea-app-dashboard", "co-cddo", config, "cdk-app", gh_client)
 
 
 def test_get_repo_name_from_directory(tmp_path):
@@ -359,7 +360,8 @@ def test_get_repo_name_from_directory(tmp_path):
 
 def _econ_config() -> Config:
     return Config(
-        org="co-cddo",
+        organisations=["co-cddo"],
+        default_organisation="co-cddo",
         repo_prefixes=["gds-idea-"],
         teams={
             "gds-idea-all": "read",
@@ -445,7 +447,7 @@ def test_init_econ_attaches_extra_teams(mock_git, httpx_mock: HTTPXMock, gh_clie
     )
 
     config = _econ_config()
-    steps = init_repo("gds-idea-econ-housing", config, "econ", gh_client)
+    steps = init_repo("gds-idea-econ-housing", "co-cddo", config, "econ", gh_client)
 
     assert any("gds-idea-econ" in s and "write" in s for s in steps)
     assert any("gds-idea-all" in s for s in steps)

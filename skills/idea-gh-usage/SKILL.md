@@ -8,7 +8,7 @@ license: MIT
 
 ## What idea-gh does
 
-`idea-gh` is a CLI tool that audits GitHub repositories in the `co-cddo` organisation against a shared configuration, reports what does not comply, and fixes most of it automatically. It enforces naming conventions, repo settings, team permissions, branch protection (as rulesets), required files and workflows, release labels and security settings.
+`idea-gh` is a CLI tool that audits GitHub repositories in the `co-cddo` organisation (or another configured organisation, such as `gds-dtx`, via `--org`) against a shared configuration, reports what does not comply, and fixes most of it automatically. It enforces naming conventions, repo settings, team permissions, branch protection (as rulesets), required files and workflows, release labels and security settings.
 
 ## When to use it
 
@@ -56,6 +56,7 @@ Audit every repo in the org whose name starts with a known prefix (`gds-idea-`):
 idea-gh audit --all
 idea-gh audit --all --type cdk-app   # only repos of one type
 idea-gh audit --all --fix
+idea-gh audit --all --org gds-dtx    # audit a different configured organisation
 ```
 
 Failures are grouped as auto-fixable, needs a manual fix, and warnings. `--fix` applies the fixes and then audits again to show the result.
@@ -66,11 +67,12 @@ Create a new GitHub repo and configure it fully:
 
 ```bash
 idea-gh init --type <repo-type>
+idea-gh init --type <repo-type> --org gds-dtx   # create it in a different configured organisation
 ```
 
-Run it from inside a local git repo that has at least one commit. The repo's directory name must match the naming pattern for the type. In order, it:
+Run it from inside a local git repo that has at least one commit. The repo's directory name must match the naming pattern for the type. It creates the repo in the configured default organisation unless `--org` says otherwise. In order, it:
 
-1. Creates the repo in `co-cddo` (private by default) and pushes. If `origin` already points at that repo, for example after `gh repo create --source . --push`, it uses the existing repo instead.
+1. Creates the repo (private by default) and pushes. If `origin` already points at that repo, for example after `gh repo create --source . --push`, it uses the existing repo instead.
 2. Applies the standard repo settings.
 3. Renames the default branch if the type needs a different one (`main` to `dev` for `cdk-app`).
 4. Creates any extra branches the type needs (`prod` for `cdk-app`).
@@ -116,10 +118,9 @@ idea-gh remove-collaborators --all --yes   # skip the confirmation
 Show the numeric IDs that AWS OIDC trust policies need:
 
 ```bash
-idea-gh show-id                          # this repo's ID and its OIDC sub claim prefix
-idea-gh show-id --repo gds-idea-gh-kit   # another repo in the configured org
-idea-gh show-id --org                    # the organisation's ID
-idea-gh show-id --repo gds-idea-gh-kit --org
+idea-gh show-id                                    # this repo's org id, repo id and OIDC sub claim prefix
+idea-gh show-id --repo gds-idea-gh-kit             # another repo in the default configured org
+idea-gh show-id --repo gds-idea-gh-kit --org gds-dtx   # a repo in a different configured org
 ```
 
 ### Global options
