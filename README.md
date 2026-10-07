@@ -21,7 +21,7 @@ brew install gh
 gh auth login
 ```
 
-You need access to the `co-cddo` GitHub organisation.
+You need access to the `co-cddo` GitHub organisation (or `gds-dtx`, if that's the org you're working in).
 
 ## Installation
 
@@ -86,6 +86,12 @@ Filter by repo type:
 idea-gh audit --all --type cdk-app
 ```
 
+Audit a different configured organisation (the default is `co-cddo`):
+
+```bash
+idea-gh audit --all --org gds-dtx
+```
+
 ### Auto-fix issues
 
 Fix everything that can be fixed automatically (settings, teams, branch rulesets, security):
@@ -120,14 +126,14 @@ idea-gh remove-collaborators jane-doe bob-smith
 # Remove all direct collaborators
 idea-gh remove-collaborators --all
 
-# Show the repo ID and OIDC sub prefix claim for the current directory
+# Show the org ID, repo ID, and OIDC sub claim prefix for the current directory
 idea-gh show-id
 
-# Show the ID of a specific repo in the configured org
+# Show the ID of a specific repo in the default configured org
 idea-gh show-id --repo gds-idea-gh-kit
 
-# Show the configured org's ID (plus the current repo's, if run inside one)
-idea-gh show-id --org
+# Show the ID of a repo in a different configured org
+idea-gh show-id --repo gds-idea-gh-kit --org gds-dtx
 ```
 
 ## What gets fixed
@@ -149,7 +155,7 @@ idea-gh show-id --org
 
 ## Configuration
 
-A default configuration is bundled with the tool and updates automatically when you upgrade. It defines the standards for `co-cddo` repos.
+A default configuration is bundled with the tool and updates automatically when you upgrade. It defines the standards for `co-cddo` (and `gds-dtx`) repos.
 
 To use a custom configuration instead:
 
@@ -159,7 +165,8 @@ idea-gh --config path/to/my-config.yml audit
 
 See [`config.example.yml`](config.example.yml) for the full configuration reference. The main sections are:
 
-- **`org`** -- GitHub organisation name
+- **`organisations`** -- GitHub organisations the tool is allowed to operate against
+- **`default_organisation`** -- organisation used when `--org` is not passed (must be one of `organisations`)
 - **`teams`** -- expected teams and their permission levels
 - **`repo_settings`** -- merge strategy, wiki, issues, projects
 - **`required_files`** -- files that must exist in every repo

@@ -169,11 +169,11 @@ def test_run_git_step_never_raises_when_git_missing(monkeypatch):
 
 @patch("gds_idea_gh_kit.github_client.GitHubClient")
 @patch("gds_idea_gh_kit.repo_info.get_repo_from_remote")
-def test_show_id_default_shows_repo_id_and_oidc_claim_prefix(mock_get_remote, mock_client_cls):
-    """With no flags inside a git repo, the repo id and OIDC sub claim prefix are printed
-    (--org is a flag now)."""
+def test_show_id_default_shows_org_repo_id_and_oidc_claim_prefix(mock_get_remote, mock_client_cls):
+    """With no flags inside a git repo, the org id, repo id and OIDC sub claim prefix are printed."""
     mock_get_remote.return_value = ("co-cddo", "x")
     client = MagicMock()
+    client.get_org.return_value = {"id": 999}
     client.get_repo.return_value = {"id": 111}
     client.get_oidc_sub_claim.return_value = {"sub_claim_prefix": "repo:co-cddo/x"}
     mock_client_cls.return_value.__enter__.return_value = client
@@ -181,9 +181,10 @@ def test_show_id_default_shows_repo_id_and_oidc_claim_prefix(mock_get_remote, mo
     result = CliRunner().invoke(cli, ["show-id"])
 
     assert result.exit_code == 0, result.output
+    assert "Organisation: co-cddo, id: 999" in result.output
     assert "Repository: x, id: 111" in result.output
     assert "OIDC claim prefix: repo:co-cddo/x" in result.output
-    client.get_org.assert_not_called()
+    client.get_org.assert_called_once_with("co-cddo")
 
 
 @patch("gds_idea_gh_kit.github_client.GitHubClient")

@@ -84,12 +84,12 @@ def _check_preconditions(repo_name: str, config: Config, repo_type: str) -> bool
         except RepoInfoError:
             existing_owner, existing_repo = None, None
 
-        if existing_owner == config.org and existing_repo == repo_name:
+        if existing_owner in config.organisations and existing_repo == repo_name:
             repo_already_created = True
         else:
             raise InitError(
                 f"This repo already has a remote 'origin' pointing to '{existing_url}', "
-                f"which doesn't match the expected repo '{config.org}/{repo_name}'. "
+                f"which doesn't match the expected repo '{'|'.join(config.organisations)}/{repo_name}'. "
                 "Use 'idea-gh audit --fix' to configure it, or remove the remote and re-run init."
             )
 
@@ -106,6 +106,7 @@ def _check_preconditions(repo_name: str, config: Config, repo_type: str) -> bool
 
 def init_repo(
     repo_name: str,
+    repo_organisation: str,
     config: Config,
     repo_type: str,
     client: GitHubClient,
@@ -118,7 +119,7 @@ def init_repo(
     Raises InitError if preconditions are not met or a step fails.
     """
     steps: list[str] = []
-    org = config.org
+    org = repo_organisation
     type_config = config.repo_types[repo_type]
     default_branch = type_config.default_branch
 

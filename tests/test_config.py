@@ -12,7 +12,8 @@ from gds_idea_gh_kit.models import Config, RepoTypeConfig
 def test_load_bundled_config():
     """Loading with no path should use the bundled config."""
     config = load_config()
-    assert config.org == "co-cddo"
+    assert "co-cddo" in config.organisations
+    assert config.default_organisation == "co-cddo"
     assert len(config.repo_types) > 0
     assert len(config.repo_prefixes) > 0
     # Each repo type should have detection files (except name-only types like econ)
@@ -27,7 +28,8 @@ def test_load_custom_config(tmp_path):
     config_file = tmp_path / "idea-gh.yml"
     config_file.write_text(
         """\
-org: co-cddo
+organisations: [co-cddo]
+default_organisation: co-cddo
 default_visibility: private
 teams:
   cddo-idea-admins: admin
@@ -51,22 +53,25 @@ repo_types:
 """
     )
     config = load_config(config_file)
-    assert config.org == "co-cddo"
+    assert config.organisations == ["co-cddo"]
+    assert config.default_organisation == "co-cddo"
     assert "cddo-idea-admins" in config.teams
     assert "cdk-app" in config.repo_types
     assert config.repo_types["cdk-app"].default_branch == "dev"
 
 
 def test_load_minimal_config(tmp_path):
-    """Only org is truly required."""
+    """organisations and default_organisation are the only truly required fields."""
     config_file = tmp_path / "idea-gh.yml"
     config_file.write_text(
         """\
-org: myorg
+organisations: [myorg]
+default_organisation: myorg
 """
     )
     config = load_config(config_file)
-    assert config.org == "myorg"
+    assert config.organisations == ["myorg"]
+    assert config.default_organisation == "myorg"
     assert config.default_visibility == "private"  # default
 
 
@@ -89,19 +94,24 @@ def test_load_empty_file(tmp_path):
 # --- Validation ---
 
 
-def test_missing_org():
-    with pytest.raises(ValidationError, match="org"):
-        Config()
+def test_missing_organisations():
+    with pytest.raises(ValidationError, match="organisations"):
+        Config(default_organisation="co-cddo")
+
+
+def test_missing_default_organisation():
+    with pytest.raises(ValidationError, match="default_organisation"):
+        Config(organisations=["co-cddo"])
 
 
 def test_invalid_visibility():
     with pytest.raises(ValidationError, match="public.*private.*internal"):
-        Config(org="co-cddo", default_visibility="secret")
+        Config(organisations=["co-cddo"], default_organisation="co-cddo", default_visibility="secret")
 
 
 def test_invalid_team_permission():
     with pytest.raises(ValidationError, match="invalid permission"):
-        Config(org="co-cddo", teams={"myteam": "superadmin"})
+        Config(organisations=["co-cddo"], default_organisation="co-cddo", teams={"myteam": "superadmin"})
 
 
 def test_naming_pattern_requires_placeholder():
@@ -120,7 +130,7 @@ def test_invalid_extra_team_permission():
 
 def test_extra_fields_rejected():
     with pytest.raises(ValidationError, match="extra"):
-        Config(org="co-cddo", bogus_field="oops")
+        Config(organisations=["co-cddo"], default_organisation="co-cddo", bogus_field="oops")
 
 
 # --- RepoTypeConfig matching ---
@@ -152,7 +162,8 @@ def test_econ_naming_pattern():
 
 def test_has_known_prefix():
     config = Config(
-        org="co-cddo",
+        organisations=["co-cddo"],
+        default_organisation="co-cddo",
         repo_prefixes=["gds-idea-"],
         repo_types={
             "cdk-app": RepoTypeConfig(naming_pattern="gds-idea-app-{name}", default_branch="dev"),

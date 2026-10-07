@@ -47,7 +47,8 @@ def check_config(ctx: click.Context):
         raise click.ClickException(str(e))
 
     click.echo("Configuration is valid.")
-    click.echo(f"  Org: {config.org}")
+    click.echo(f"  Organisations: {', '.join(config.organisations)}")
+    click.echo(f"  Default organisation: {config.default_organisation}")
     click.echo(f"  Visibility: {config.default_visibility}")
     click.echo(f"  Teams: {len(config.teams)}")
     click.echo(f"  Repo types: {', '.join(config.repo_types.keys())}")
@@ -56,15 +57,21 @@ def check_config(ctx: click.Context):
 
 @cli.command("audit")
 @click.option("--type", "repo_type", default=None, help="Override repo type detection.")
+@click.option("--org", "repo_organisation", default=None, help="Override the default organisation.")
 @click.option("--all", "audit_all", is_flag=True, help="Audit all repos in the org.")
 @click.option("--fix", "apply_fix", is_flag=True, help="Auto-fix issues where possible.")
 @click.option("--verbose", is_flag=True, help="Show all checks including passing.")
 @click.pass_context
-def audit(ctx: click.Context, repo_type: str | None, audit_all: bool, apply_fix: bool, verbose: bool):
+def audit(
+    ctx: click.Context, repo_type: str | None, repo_organisation: str, audit_all: bool, apply_fix: bool, verbose: bool
+):
     """Audit repo(s) against the configured standards.
 
     Run from inside a repo to audit that repo, or use --all to audit
-    every repo in the org that matches a known prefix.
+    every repo in the org that matches a known prefix. With --all, use
+    --org to audit an organisation other than the configured default
+    (must be one of the configured organisations); without --all, the
+    org is taken from the repo's own git remote.
 
     Use --fix to automatically correct issues where possible (settings,
     teams, branch rulesets, security).
@@ -90,14 +97,22 @@ def audit(ctx: click.Context, repo_type: str | None, audit_all: bool, apply_fix:
     if repo_type and repo_type not in config.repo_types:
         raise click.ClickException(f"Unknown repo type '{repo_type}'. Available: {', '.join(config.repo_types.keys())}")
 
-    with GitHubClient(org=config.org) as client:
+    if repo_organisation:
+        if repo_organisation not in config.organisations:
+            raise click.ClickException(
+                f"Unknown organisation '{repo_organisation}'. Available: {', '.join(config.organisations)}"
+            )
+    else:
+        repo_organisation = config.default_organisation
+
+    with GitHubClient(org=repo_organisation) as client:
         try:
             client.verify_connection()
         except (GitHubClientError, AuthError) as e:
             raise click.ClickException(str(e))
 
         if audit_all:
-            _audit_all_repos(config, client, repo_type, apply_fix=apply_fix, verbose=verbose)
+            _audit_all_repos(config, client, repo_type, repo_organisation, apply_fix=apply_fix, verbose=verbose)
         else:
             try:
                 owner, repo = get_repo_from_remote()
@@ -262,6 +277,7 @@ def _audit_all_repos(
     config: Config,
     client: GitHubClient,
     repo_type_filter: str | None,
+    repo_organisation: str | None,
     apply_fix: bool = False,
     verbose: bool = False,
 ):
@@ -269,7 +285,7 @@ def _audit_all_repos(
     from gds_idea_gh_kit.audit import audit_repo, detect_repo_type, fix_repo, render_report
     from gds_idea_gh_kit.github_client import GitHubClientError
 
-    repos = client.list_org_repos(config.org)
+    repos = client.list_org_repos(repo_organisation)
     total_passed = 0
     total_failed = 0
     total_warnings = 0
@@ -291,7 +307,7 @@ def _audit_all_repos(
 
         try:
             detected_type = repo_type_filter or detect_repo_type(
-                config.org,
+                repo_organisation,
                 repo_name,
                 config,
                 client,
@@ -305,7 +321,7 @@ def _audit_all_repos(
             continue
 
         try:
-            report = audit_repo(config.org, repo_name, config, client, detected_type)
+            report = audit_repo(repo_organisation, repo_name, config, client, detected_type)
         except GitHubClientError as e:
             click.echo(f"Skipping {repo_name}: {e}")
             skipped += 1
@@ -316,13 +332,13 @@ def _audit_all_repos(
         if apply_fix and report.fixable:
             click.echo()
             try:
-                fix_result = fix_repo(config.org, repo_name, config, client, detected_type)
+                fix_result = fix_repo(repo_organisation, repo_name, config, client, detected_type)
                 _render_fix_result(fix_result)
-                _warn_stale_branches(fix_result, config.org, repo_name, client)
+                _warn_stale_branches(fix_result, repo_organisation, repo_name, client)
 
                 # Re-audit to show updated state
                 click.echo()
-                report = audit_repo(config.org, repo_name, config, client, detected_type)
+                report = audit_repo(repo_organisation, repo_name, config, client, detected_type)
                 click.echo(render_report(report, verbose=verbose))
             except GitHubClientError as e:
                 click.echo(f"  Fix failed for {repo_name}: {e}")
@@ -354,18 +370,24 @@ def _audit_all_repos(
     required=True,
     help="Repo type (e.g. cdk-app). Determines naming, branches, and rulesets.",
 )
+@click.option("--org", "repo_organisation", default=None, help="Override the default organisation.")
 @click.pass_context
-def init(ctx: click.Context, repo_type: str):
+def init(ctx: click.Context, repo_type: str, repo_organisation: str):
     """Create a GitHub repo and configure it to pass audit.
 
     Run from inside a local repo directory (after 'idea-app init').
     Creates the GitHub repo, pushes, and applies all standard settings,
     teams, branch protection, and security configuration.
 
+    Creates the repo in the configured default organisation, or use
+    --org to target a different organisation (must be one of the
+    configured organisations).
+
     \b
     Example:
       cd gds-idea-app-my-dashboard
       idea-gh init --type cdk-app
+      idea-gh init --type cdk-app --org gds-dtx
     """
     from gds_idea_gh_kit.config import ConfigError, load_config
     from gds_idea_gh_kit.github_client import AuthError, GitHubClient, GitHubClientError
@@ -388,7 +410,15 @@ def init(ctx: click.Context, repo_type: str):
 
     repo_name = get_repo_name_from_directory()
 
-    with GitHubClient(org=config.org) as client:
+    if repo_organisation:
+        if repo_organisation not in config.organisations:
+            raise click.ClickException(
+                f"Unknown organisation '{repo_organisation}'. Available: {', '.join(config.organisations)}"
+            )
+    else:
+        repo_organisation = config.default_organisation
+
+    with GitHubClient(org=repo_organisation) as client:
         try:
             client.verify_connection()
         except (GitHubClientError, AuthError) as e:
@@ -397,7 +427,7 @@ def init(ctx: click.Context, repo_type: str):
         click.echo(f"Initialising {repo_name} as {repo_type}...\n")
 
         try:
-            steps = init_repo(repo_name, config, repo_type, client)
+            steps = init_repo(repo_name, repo_organisation, config, repo_type, client)
         except InitError as e:
             raise click.ClickException(str(e))
 
@@ -423,7 +453,7 @@ def rename(ctx: click.Context, new_name: str, yes: bool):
     from gds_idea_gh_kit.repo_info import RepoInfoError, get_repo_from_remote
 
     try:
-        config = load_config(ctx.obj["config_path"])
+        load_config(ctx.obj["config_path"])
     except ConfigError as e:
         raise click.ClickException(str(e))
 
@@ -441,7 +471,7 @@ def rename(ctx: click.Context, new_name: str, yes: bool):
         click.echo()
         click.confirm(f"Rename '{owner}/{repo}' to '{owner}/{new_name}'?", abort=True)
 
-    with GitHubClient(org=config.org) as client:
+    with GitHubClient(org=owner) as client:
         try:
             client.verify_connection()
         except (GitHubClientError, AuthError) as e:
@@ -476,7 +506,7 @@ def remove_collaborators(ctx: click.Context, usernames: tuple[str, ...], remove_
         raise click.ClickException("Provide usernames to remove, or use --all to remove all direct collaborators.")
 
     try:
-        config = load_config(ctx.obj["config_path"])
+        load_config(ctx.obj["config_path"])
     except ConfigError as e:
         raise click.ClickException(str(e))
 
@@ -485,7 +515,7 @@ def remove_collaborators(ctx: click.Context, usernames: tuple[str, ...], remove_
     except RepoInfoError as e:
         raise click.ClickException(str(e))
 
-    with GitHubClient(org=config.org) as client:
+    with GitHubClient(org=owner) as client:
         try:
             client.verify_connection()
         except (GitHubClientError, AuthError) as e:
@@ -528,69 +558,71 @@ def remove_collaborators(ctx: click.Context, usernames: tuple[str, ...], remove_
 
 
 @cli.command("show-id")
-@click.option("--org", is_flag=True, help="Show organisation ID.")
-@click.option("--repo", help="Show repository ID.")
+@click.option("--repo", "repo_name", default=None, help="Repository name.")
+@click.option("--org", "repo_organisation", default=None, help="Organisation name.")
 @click.pass_context
-def show_id(ctx: click.Context, org: bool, repo: str | None):
-    """Show organisation or repo ID.
+def show_id(ctx: click.Context, repo_name: str, repo_organisation: str):
+    """Show organisation and repo IDs, and the repo's OIDC sub claim prefix.
 
-    Show current directory repository id and oidc sub claim prefix and optionally owner id.
-    Or pass repository name from config organisation and show its id
-    and optionally owner id.
+    With no flags, run from inside a repo: shows that repo's organisation
+    id, repo id, and OIDC sub claim prefix. Use --repo to look up a
+    repository by name instead of the current directory's remote, and
+    --org to target an organisation other than the configured default
+    (must be one of the configured organisations). Note: --org alone,
+    without --repo, is overridden by the current directory's remote
+    when run inside a git repo.
 
     \b
     Examples:
       idea-gh show-id
       idea-gh show-id --repo gds-idea-gh-kit
-      idea-gh show-id --org
-      idea-gh show-id --repo gds-idea-gh-kit --org
+      idea-gh show-id --repo gds-idea-gh-kit --org gds-dtx
     """
     from gds_idea_gh_kit.config import ConfigError, load_config
     from gds_idea_gh_kit.github_client import AuthError, GitHubClient, GitHubClientError
     from gds_idea_gh_kit.repo_info import RepoInfoError, get_repo_from_remote
 
-    owner = None
-    if repo is None:
+    try:
+        config = load_config(ctx.obj["config_path"])
+    except ConfigError as e:
+        raise click.ClickException(str(e))
+
+    if repo_organisation:
+        if repo_organisation not in config.organisations:
+            raise click.ClickException(
+                f"Unknown organisation '{repo_organisation}'. Available: {', '.join(config.organisations)}"
+            )
+    else:
+        repo_organisation = config.default_organisation
+
+    if repo_name is None:
         try:
-            owner, repo = get_repo_from_remote()
+            repo_organisation, repo_name = get_repo_from_remote()
         except RepoInfoError:
-            pass
+            raise click.ClickException(
+                "Provide repository name if you are not in git repository folder with configured remote."
+            )
 
-    if owner is None and (org or repo is not None):
-        try:
-            config = load_config(ctx.obj["config_path"])
-            owner = config.org
-        except ConfigError as e:
-            raise click.ClickException(str(e))
-
-    if repo is None and not org:
-        raise click.ClickException(
-            "Not in a git repo and no --repo or --org given. "
-            "Run from inside a repo, or pass --repo <name> and/or --org."
-        )
-
-    with GitHubClient(org=owner if org else None) as client:
+    with GitHubClient(org=repo_organisation) as client:
         try:
             client.verify_connection()
         except (GitHubClientError, AuthError) as e:
             raise click.ClickException(str(e))
 
-        if org:
-            try:
-                owner_id = client.get_org(owner).get("id")
-            except (GitHubClientError, AuthError) as e:
-                raise click.ClickException(str(e))
-            click.echo(f"  Organisation: {owner}, id: {owner_id}")
+        try:
+            owner_id = client.get_org(repo_organisation).get("id")
+        except (GitHubClientError, AuthError) as e:
+            raise click.ClickException(str(e))
+        click.echo(f"  Organisation: {repo_organisation}, id: {owner_id}")
 
-        if repo is not None:
-            try:
-                repo_id = client.get_repo(owner, repo).get("id")
-            except (GitHubClientError, AuthError) as e:
-                raise click.ClickException(str(e))
-            click.echo(f"  Repository: {repo}, id: {repo_id}")
+        try:
+            repo_id = client.get_repo(repo_organisation, repo_name).get("id")
+        except (GitHubClientError, AuthError) as e:
+            raise click.ClickException(str(e))
+        click.echo(f"  Repository: {repo_name}, id: {repo_id}")
 
-            try:
-                sub_claim_prefix = client.get_oidc_sub_claim(owner, repo).get("sub_claim_prefix")
-            except (GitHubClientError, AuthError) as e:
-                raise click.ClickException(str(e))
-            click.echo(f"  OIDC claim prefix: {sub_claim_prefix}")
+        try:
+            sub_claim_prefix = client.get_oidc_sub_claim(repo_organisation, repo_name).get("sub_claim_prefix")
+        except (GitHubClientError, AuthError) as e:
+            raise click.ClickException(str(e))
+        click.echo(f"  OIDC claim prefix: {sub_claim_prefix}")

@@ -190,7 +190,8 @@ class SecurityConfig(BaseModel):
 class Config(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    org: str
+    organisations: list[str]
+    default_organisation: str
     default_visibility: str = "private"
     repo_prefixes: list[str] = Field(default_factory=list)
     """Prefixes used to filter repos in --all mode (e.g. ['gds-idea-'])."""

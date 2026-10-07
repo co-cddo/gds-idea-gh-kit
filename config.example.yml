@@ -1,4 +1,5 @@
-org: co-cddo
+organisations: [co-cddo, gds-dtx]
+default_organisation: co-cddo
 default_visibility: private
 
 repo_prefixes:
