@@ -10,6 +10,7 @@ from gds_idea_gh_kit.cli import (
     _handle_branch_rename_migration,
     _handle_stale_branches,
     _run_git_step,
+    _update_branch_upstreams,
     _warn_stale_branches,
     cli,
 )
@@ -294,3 +295,139 @@ def test_handle_branch_rename_migration_stops_on_first_failure(monkeypatch, caps
     out = capsys.readouterr().out
     assert "failed" in out
     assert "Stopping local migration" in out
+
+
+# --- _update_branch_upstreams ---
+
+
+def _fake_run_for_each_ref(local: str, remote: str):
+    """Build a fake subprocess.run that answers the two for-each-ref listings used."""
+
+    def fake_run(cmd, **kwargs):
+        if cmd[:3] == ["git", "for-each-ref", "--format=%(refname:short)"]:
+            if cmd[3] == "refs/heads/":
+                return _FakeCompletedProcess(stdout=local)
+            if cmd[3] == "refs/remotes/origin/":
+                return _FakeCompletedProcess(stdout=remote)
+        return _FakeCompletedProcess()
+
+    return fake_run
+
+
+def test_update_branch_upstreams_sets_upstream_only_for_branches_on_remote(monkeypatch):
+    calls = []
+
+    base_fake_run = _fake_run_for_each_ref(local="main\nfeature\n", remote="origin/HEAD\norigin/main\n")
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        return base_fake_run(cmd, **kwargs)
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    _update_branch_upstreams()
+
+    assert ["git", "branch", "-u", "origin/main", "main"] in calls
+    assert ["git", "branch", "-u", "origin/feature", "feature"] not in calls
+
+
+def test_update_branch_upstreams_no_matching_remote_branches(monkeypatch):
+    calls = []
+    base_fake_run = _fake_run_for_each_ref(local="feature\n", remote="origin/HEAD\norigin/main\n")
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        return base_fake_run(cmd, **kwargs)
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    _update_branch_upstreams()
+
+    assert not any(cmd[:2] == ["git", "branch"] for cmd in calls)
+
+
+def test_update_branch_upstreams_stops_if_local_branches_cannot_be_listed(monkeypatch, capsys):
+    monkeypatch.setattr("subprocess.run", lambda cmd, **kwargs: _FakeCompletedProcess(returncode=1, stderr="boom"))
+
+    _update_branch_upstreams()  # should not raise
+
+    assert "Could not list local branches" in capsys.readouterr().out
+
+
+# --- transfer_owner ---
+
+
+@patch("gds_idea_gh_kit.github_client.GitHubClient")
+@patch("gds_idea_gh_kit.repo_info.get_repo_from_remote")
+def test_transfer_owner_success(mock_get_remote, mock_client_cls, monkeypatch):
+    mock_get_remote.return_value = ("co-cddo", "my-repo")
+    client = MagicMock()
+    mock_client_cls.return_value.__enter__.return_value = client
+
+    def fake_run(cmd, **kwargs):
+        if cmd == ["git", "remote", "get-url", "origin"]:
+            return _FakeCompletedProcess(stdout="git@github.com:co-cddo/my-repo.git")
+        if cmd[:3] == ["git", "for-each-ref", "--format=%(refname:short)"]:
+            if cmd[3] == "refs/heads/":
+                return _FakeCompletedProcess(stdout="main\n")
+            if cmd[3] == "refs/remotes/origin/":
+                return _FakeCompletedProcess(stdout="origin/HEAD\norigin/main\n")
+        return _FakeCompletedProcess()
+
+    monkeypatch.setattr("subprocess.run", fake_run)
+
+    result = CliRunner().invoke(cli, ["transfer-owner", "--yes"])
+
+    assert result.exit_code == 0, result.output
+    client.transfer_repo.assert_called_once_with("co-cddo", "my-repo", "gds-dtx")
+    assert "Transferred co-cddo/my-repo -> gds-dtx/my-repo" in result.output
+    assert "git remote set-url origin git@github.com:gds-dtx/my-repo.git" in result.output
+    assert "git fetch origin --prune" in result.output
+    assert "git branch -u origin/main main" in result.output
+    assert "Run 'idea-gh audit'" in result.output
+
+
+def test_transfer_owner_unknown_organisation():
+    result = CliRunner().invoke(cli, ["transfer-owner", "--org", "not-a-real-org", "--yes"])
+
+    assert result.exit_code != 0
+    assert "Unknown organisation" in result.output
+
+
+@patch("gds_idea_gh_kit.repo_info.get_repo_from_remote")
+def test_transfer_owner_noop_when_already_owned_by_target_org(mock_get_remote):
+    mock_get_remote.return_value = ("gds-dtx", "my-repo")
+
+    result = CliRunner().invoke(cli, ["transfer-owner", "--yes"])
+
+    assert result.exit_code != 0
+    assert "already owned by" in result.output
+
+
+@patch("gds_idea_gh_kit.repo_info.get_repo_from_remote")
+def test_transfer_owner_aborts_when_confirmation_declined(mock_get_remote):
+    mock_get_remote.return_value = ("co-cddo", "my-repo")
+
+    result = CliRunner().invoke(cli, ["transfer-owner"], input="n\n")
+
+    assert result.exit_code != 0
+    assert "WARNING: Transferring a repo" in result.output
+
+
+@patch("gds_idea_gh_kit.github_client.GitHubClient")
+@patch("gds_idea_gh_kit.repo_info.get_repo_from_remote")
+def test_transfer_owner_handles_unreadable_local_remote(mock_get_remote, mock_client_cls, monkeypatch):
+    mock_get_remote.return_value = ("co-cddo", "my-repo")
+    client = MagicMock()
+    mock_client_cls.return_value.__enter__.return_value = client
+
+    monkeypatch.setattr(
+        "subprocess.run", lambda cmd, **kwargs: _FakeCompletedProcess(returncode=1, stderr="no such remote")
+    )
+
+    result = CliRunner().invoke(cli, ["transfer-owner", "--yes"])
+
+    assert result.exit_code == 0, result.output
+    client.transfer_repo.assert_called_once_with("co-cddo", "my-repo", "gds-dtx")
+    assert "Could not read local 'origin' remote" in result.output
+    assert "idea-gh audit --org gds-dtx" in result.output

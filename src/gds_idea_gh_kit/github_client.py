@@ -140,6 +140,10 @@ class GitHubClient:
         payload = {"name": name, **settings}
         return self._request("POST", f"/orgs/{org}/repos", json=payload).json()
 
+    def transfer_repo(self, owner: str, repo: str, new_owner: str) -> dict:
+        """Transfer a repository to a new owner (org or user)."""
+        return self._request("POST", f"/repos/{owner}/{repo}/transfer", json={"new_owner": new_owner}).json()
+
     def list_org_repos(self, org: str, per_page: int = 100) -> list[dict]:
         """List all repositories in an org (handles pagination)."""
         repos = []

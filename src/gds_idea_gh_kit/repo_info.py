@@ -51,3 +51,17 @@ def parse_github_remote(url: str) -> tuple[str, str]:
         return match.group(1), match.group(2)
 
     raise RepoInfoError(f"Could not parse GitHub owner/repo from remote URL: {url}")
+
+
+def rewrite_remote_owner(url: str, new_owner: str) -> str:
+    """Return `url` with its owner replaced by `new_owner`, preserving format.
+
+    Supports the same SSH and HTTPS forms as `parse_github_remote`.
+    """
+    _, repo = parse_github_remote(url)
+
+    if url.startswith("git@github.com:"):
+        return f"git@github.com:{new_owner}/{repo}.git"
+
+    suffix = ".git" if url.endswith(".git") else ""
+    return f"https://github.com/{new_owner}/{repo}{suffix}"

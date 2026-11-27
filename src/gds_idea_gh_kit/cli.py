@@ -481,6 +481,109 @@ def rename(ctx: click.Context, new_name: str, yes: bool):
         click.echo(f"Renamed {owner}/{repo} -> {owner}/{new_name}")
 
 
+@cli.command("transfer-owner")
+@click.option("--org", "org", default="gds-dtx", help="Organisation to transfer to (default: gds-dtx).")
+@click.option("--yes", is_flag=True, help="Skip confirmation prompt.")
+@click.pass_context
+def transfer_owner(ctx: click.Context, org: str, yes: bool):
+    """Transfer the current repo to a different organisation. Use with caution.
+
+    Run from inside the repo. Transfers to the organisation given by
+    --org (must be one of the configured organisations), defaulting to
+    'gds-dtx'. After the transfer, this local clone's 'origin' remote
+    is updated to point at the new owner, and the upstream tracking
+    branch is set for any local branches that already exist on the
+    remote.
+
+    This will break existing clones, CI/CD pipelines, webhooks, and any
+    access granted to teams/collaborators in the old organisation.
+    """
+    from gds_idea_gh_kit.config import ConfigError, load_config
+    from gds_idea_gh_kit.github_client import AuthError, GitHubClient, GitHubClientError
+    from gds_idea_gh_kit.repo_info import RepoInfoError, get_repo_from_remote, rewrite_remote_owner
+
+    try:
+        config = load_config(ctx.obj["config_path"])
+    except ConfigError as e:
+        raise click.ClickException(str(e))
+
+    if org not in config.organisations:
+        raise click.ClickException(f"Unknown organisation '{org}'. Available: {', '.join(config.organisations)}")
+
+    try:
+        owner, repo = get_repo_from_remote()
+    except RepoInfoError as e:
+        raise click.ClickException(str(e))
+
+    if owner == org:
+        raise click.ClickException(f"'{owner}/{repo}' is already owned by '{org}'.")
+
+    if not yes:
+        click.echo("WARNING: Transferring a repo has the following consequences:")
+        click.echo("  - CI/CD pipelines, webhooks, and secrets scoped to the old org may stop working")
+        click.echo("  - Team and collaborator access from the old org is lost")
+        click.echo("  - Other existing clones will have a stale remote URL")
+        click.echo()
+        click.confirm(f"Transfer '{owner}/{repo}' to '{org}'?", abort=True)
+
+    with GitHubClient(org=owner) as client:
+        try:
+            client.verify_connection()
+        except (GitHubClientError, AuthError) as e:
+            raise click.ClickException(str(e))
+
+        client.transfer_repo(owner, repo, org)
+        click.echo(f"Transferred {owner}/{repo} -> {org}/{repo}")
+
+    ok, origin_url = _run_git_step("remote", "get-url", "origin")
+    if not ok:
+        click.echo(f"  \u2717 Could not read local 'origin' remote: {origin_url}")
+        click.echo(f"  Update it manually, then run: idea-gh audit --org {org}")
+        return
+
+    new_url = rewrite_remote_owner(origin_url, org)
+    for args in [("remote", "set-url", "origin", new_url), ("fetch", "origin", "--prune")]:
+        ok, output = _run_git_step(*args)
+        command = "git " + " ".join(args)
+        if ok:
+            click.echo(f"  \u2713 {command}")
+        else:
+            click.echo(f"  \u2717 {command} failed: {output}")
+            click.echo("  Update your local clone manually, then run: idea-gh audit")
+            return
+
+    _update_branch_upstreams()
+
+    click.echo()
+    click.echo("Done. Run 'idea-gh audit' to verify the repo passes audit in its new organisation.")
+
+
+def _update_branch_upstreams(remote: str = "origin"):
+    """Set the upstream tracking branch for local branches that exist on `remote`."""
+    ok, local_output = _run_git_step("for-each-ref", "--format=%(refname:short)", "refs/heads/")
+    if not ok:
+        click.echo(f"  \u2717 Could not list local branches: {local_output}")
+        return
+    local_branches = [b for b in local_output.splitlines() if b]
+
+    ok, remote_output = _run_git_step("for-each-ref", "--format=%(refname:short)", f"refs/remotes/{remote}/")
+    if not ok:
+        click.echo(f"  \u2717 Could not list remote branches: {remote_output}")
+        return
+    prefix = f"{remote}/"
+    remote_branches = {b[len(prefix) :] for b in remote_output.splitlines() if b and b != f"{remote}/HEAD"}
+
+    for branch in local_branches:
+        if branch not in remote_branches:
+            continue
+        ok, output = _run_git_step("branch", "-u", f"{remote}/{branch}", branch)
+        command = f"git branch -u {remote}/{branch} {branch}"
+        if ok:
+            click.echo(f"  \u2713 {command}")
+        else:
+            click.echo(f"  \u2717 {command} failed: {output}")
+
+
 @cli.command("remove-collaborators")
 @click.argument("usernames", nargs=-1)
 @click.option("--all", "remove_all", is_flag=True, help="Remove all direct collaborators.")

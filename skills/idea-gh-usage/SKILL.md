@@ -103,6 +103,18 @@ idea-gh rename new-repo-name --yes   # skip the confirmation
 
 This renames the repo on GitHub only. It does **not** update any clone's remote, so every existing clone (including yours) needs `git remote set-url origin <new url>`. It also breaks CI/CD pipelines that use the old name and cross-repo references. GitHub redirects the old URL, but not permanently. It prints these warnings and asks for confirmation.
 
+### idea-gh transfer-owner
+
+Transfer the current repo to a different configured organisation (run it from inside the repo):
+
+```bash
+idea-gh transfer-owner                 # defaults to --org gds-dtx
+idea-gh transfer-owner --org co-cddo
+idea-gh transfer-owner --yes           # skip the confirmation
+```
+
+Unlike `rename`, this updates your local clone for you: it sets `origin` to point at the new owner, fetches, and sets the upstream tracking branch for any local branches that already exist on the remote. It breaks CI/CD pipelines, webhooks, and team/collaborator access scoped to the old organisation. It prints these warnings and asks for confirmation. Afterwards, run `idea-gh audit` to check the repo still passes audit under its new organisation.
+
 ### idea-gh remove-collaborators
 
 Remove people who were added directly rather than through a team:

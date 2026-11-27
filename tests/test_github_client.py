@@ -225,3 +225,19 @@ def test_rename_default_branch_noop_when_already_correct(httpx_mock: HTTPXMock):
     client = GitHubClient(token="fake-token", org="co-cddo")
     result = client.rename_default_branch("co-cddo", "my-repo", "dev")
     assert result["default_branch"] == "dev"
+
+
+# --- transfer_repo ---
+
+
+def test_transfer_repo(httpx_mock: HTTPXMock):
+    httpx_mock.add_response(
+        url=f"{BASE}/repos/co-cddo/my-repo/transfer",
+        method="POST",
+        match_json={"new_owner": "gds-dtx"},
+        json={"name": "my-repo", "owner": {"login": "gds-dtx"}},
+    )
+
+    client = GitHubClient(token="fake-token", org="co-cddo")
+    result = client.transfer_repo("co-cddo", "my-repo", "gds-dtx")
+    assert result["owner"]["login"] == "gds-dtx"
