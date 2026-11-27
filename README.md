@@ -120,6 +120,11 @@ idea-gh check-config
 # Rename a repo (run from inside the repo)
 idea-gh rename my-new-name
 
+# Transfer a repo to another configured org (run from inside the repo)
+# Transfer a repo to another configured org (run from inside the repo)
+idea-gh transfer-owner              # defaults to gds-dtx
+idea-gh transfer-owner --org co-cddo
+
 # Remove specific direct collaborators
 idea-gh remove-collaborators jane-doe bob-smith
 
